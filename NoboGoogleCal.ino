@@ -1,5 +1,4 @@
-#include <ArduinoIoTCloud.h>
-#include <Arduino_ConnectionHandler.h>
+#include <WiFiS3.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 
@@ -11,17 +10,14 @@
 #include "src/ScheduleEngine.h"
 #include "src/AppWebServer.h"
 #include "src/LEDDisplay.h"
-#include "config.h"  // must come after Types.h (uses ZoneConfig, HeatingStatus)
+#include "config.h"  // must come after Types.h
 
-// ─── Arduino Cloud variables ──────────────────────────────────────────────────
-String cloudStatus;
-float  cloudTemp;
-String cloudLastSync;
-String cloudNextEvent;
+// Arduino Cloud integration is temporarily disabled pending board provisioning fix.
+// See issue #16. Re-enable by restoring ArduinoIoTCloud includes and calls below.
 
 // ─── NTP ──────────────────────────────────────────────────────────────────────
 static WiFiUDP   ntpUdp;
-static NTPClient ntp(ntpUdp, "pool.ntp.org", 3600);  // UTC+1 default (winter)
+static NTPClient ntp(ntpUdp, "pool.ntp.org", 3600);
 
 // ─── Components ───────────────────────────────────────────────────────────────
 static NoboController  nobo;
@@ -31,35 +27,32 @@ static ScheduleEngine  engine(nobo, calendar, weather);
 static AppWebServer    webServer(engine, weather);
 static LEDDisplay      led(engine, weather);
 
-// ─── Arduino Cloud property registration ─────────────────────────────────────
-static void initCloudProperties() {
-    ArduinoCloud.setBoardId(SECRET_DEVICE_ID);
-    ArduinoCloud.setSecretDeviceKey(SECRET_DEVICE_KEY);
-    ArduinoCloud.addProperty(cloudStatus,    READ, ON_CHANGE, nullptr);
-    ArduinoCloud.addProperty(cloudTemp,      READ, ON_CHANGE, nullptr);
-    ArduinoCloud.addProperty(cloudLastSync,  READ, ON_CHANGE, nullptr);
-    ArduinoCloud.addProperty(cloudNextEvent, READ, ON_CHANGE, nullptr);
+static void connectWifi() {
+    Serial.print(F("Connecting to WiFi"));
+    WiFi.begin(SECRET_SSID, SECRET_PASS);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print('.');
+    }
+    Serial.println();
+    Serial.print(F("IP: "));
+    Serial.println(WiFi.localIP());
 }
 
 void setup() {
     Serial.begin(9600);
     delay(1500);
 
-    initCloudProperties();
+    connectWifi();
 
-    static WiFiConnectionHandler conn(SECRET_SSID, SECRET_PASS);
-    ArduinoCloud.begin(conn);
-    ArduinoCloud.printDebugInfo();
-
-    // Sync RTC from NTP once WiFi is up
     ntp.begin();
     ntp.update();
+
     struct timeval tv { (time_t)ntp.getEpochTime(), 0 };
     settimeofday(&tv, nullptr);
 
     nobo.begin(NOBO_HUB_IP, NOBO_HUB_SERIAL);
 
-    // Provision week profiles for each configured zone
     for (int i = 0; i < ZONE_COUNT; i++) {
         nobo.ensureProfileExists(ZONES[i].name);
     }
@@ -69,11 +62,17 @@ void setup() {
     engine.begin(ZONES, ZONE_COUNT);
     webServer.begin(WEB_PASSWORD);
     led.begin();
+
+    Serial.println(F("NoboGoogleCal ready."));
 }
 
 void loop() {
-    // Arduino Cloud update must run every iteration for OTA to work
-    ArduinoCloud.update();
+    // Reconnect WiFi if dropped
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println(F("WiFi lost — reconnecting..."));
+        connectWifi();
+    }
+
     ntp.update();
 
     webServer.tick();
@@ -82,10 +81,4 @@ void loop() {
     calendar.tick();
     weather.tick();
     nobo.tick();
-
-    // Push state to Arduino Cloud
-    cloudStatus    = engine.statusString();
-    cloudTemp      = weather.currentTemp();
-    cloudLastSync  = calendar.lastSyncTime();
-    cloudNextEvent = engine.nextEventString();
 }
