@@ -30,7 +30,6 @@ Arduino Uno R4 WiFi
 - **Local web dashboard** — shows zone status and the next 7 days of events; open on the local network
 - **Password-protected settings** — change per-zone settings via the web UI (default password: `password`)
 - **LED display** — scrolling status on the Arduino's built-in LED matrix
-- **OTA updates** — firmware updates over local WiFi using ArduinoOTA
 - **Startup provisioning** — creates Nobø weekly programs automatically if they do not already exist
 
 ## Hardware
@@ -42,7 +41,6 @@ Arduino Uno R4 WiFi
 
 ## Libraries required
 
-- `ArduinoOTA` — OTA firmware updates over local WiFi
 - `ArduinoHttpClient` — HTTPS requests
 - `ArduinoJson` — JSON parsing (weather API)
 - `Arduino_LED_Matrix` + `ArduinoGraphics` — LED matrix display
@@ -93,10 +91,6 @@ Add your zones — one per Google Calendar. Get the private ICS URL from **Googl
 ### 3. Nobø hub
 
 The Arduino must be on the same local network as the Nobø Energy Hub. Zone-to-weekly-program assignment is done manually in the Nobø app once; the Arduino manages the weekly programs from that point on.
-
-### 4. OTA updates
-
-OTA is available over local WiFi via the ArduinoOTA library. Hostname is `nobogooglecal`, password is the same as `WEB_PASSWORD`. Use the Arduino IDE or `arduino-cli` to upload over the network.
 
 ## Web dashboard
 
