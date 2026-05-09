@@ -397,8 +397,12 @@ void AppWebServer::_printZoneTimeline(WiFiClient& client, int zoneIndex) {
             }
         }
 
+        char dateBuf[6];
+        snprintf(dateBuf, sizeof(dateBuf), "%02d.%02d", dTm.tm_mday, dTm.tm_mon + 1);
         client.print(F("<div class=\"day-col\"><div class=\"day-label\">"));
         client.print(dn[dTm.tm_wday]);
+        client.print(F("<br>"));
+        client.print(dateBuf);
         client.print(F("</div><div class=\"day-block"));
         if (activeNow)     client.print(F(" comfort active"));
         else if (hasEvent) client.print(F(" comfort"));
