@@ -16,7 +16,7 @@
 
 // ─── NTP ──────────────────────────────────────────────────────────────────────
 static WiFiUDP   ntpUdp;
-static NTPClient ntp(ntpUdp, "pool.ntp.org", 3600);
+static NTPClient ntp(ntpUdp, "pool.ntp.org", 0);  // UTC only; display code applies Norway offset
 
 // ─── Components ───────────────────────────────────────────────────────────────
 static NoboController  nobo;

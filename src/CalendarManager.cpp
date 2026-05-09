@@ -73,10 +73,12 @@ void CalendarManager::_syncZone(int zoneIndex) {
     Serial.println(_eventCount);
 
     char msg[APP_LOG_WIDTH];
-    if (ok) snprintf(msg, sizeof(msg), "Cal Z%d: %d event%s",
-                     zoneIndex + 1, zoneEvCount, zoneEvCount == 1 ? "" : "s");
-    else    snprintf(msg, sizeof(msg), "Cal Z%d: fetch failed", zoneIndex + 1);
-    AppLog::add(msg);
+    if (ok) {
+        snprintf(msg, sizeof(msg), "Cal Z%d: %d event%s",
+                 zoneIndex + 1, zoneEvCount, zoneEvCount == 1 ? "" : "s");
+        AppLog::add(msg);
+    }
+    // failure already logged by _fetchIcs with specific reason
 }
 
 bool CalendarManager::_fetchIcs(const char* url, int zoneIndex) {
@@ -93,7 +95,11 @@ bool CalendarManager::_fetchIcs(const char* url, int zoneIndex) {
 
     int err = http.get(pathStart);
     if (err != 0) {
-        Serial.println(F("[Cal] HTTP GET failed"));
+        Serial.print(F("[Cal] TCP/SSL error: "));
+        Serial.println(err);
+        char msg[APP_LOG_WIDTH];
+        snprintf(msg, sizeof(msg), "Cal Z%d: TCP err %d", zoneIndex + 1, err);
+        AppLog::add(msg);
         return false;
     }
 
@@ -102,6 +108,9 @@ bool CalendarManager::_fetchIcs(const char* url, int zoneIndex) {
         Serial.print(F("[Cal] HTTP status: "));
         Serial.println(statusCode);
         http.stop();
+        char msg[APP_LOG_WIDTH];
+        snprintf(msg, sizeof(msg), "Cal Z%d: HTTP %d", zoneIndex + 1, statusCode);
+        AppLog::add(msg);
         return false;
     }
 
@@ -130,7 +139,12 @@ bool CalendarManager::_fetchIcs(const char* url, int zoneIndex) {
     }
 
     http.stop();
-    if (timeout) Serial.println(F("[Cal] Fetch timed out"));
+    if (timeout) {
+        Serial.println(F("[Cal] Fetch timed out"));
+        char msg[APP_LOG_WIDTH];
+        snprintf(msg, sizeof(msg), "Cal Z%d: timeout", zoneIndex + 1);
+        AppLog::add(msg);
+    }
     return !timeout;
 }
 
