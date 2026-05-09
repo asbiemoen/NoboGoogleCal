@@ -11,7 +11,7 @@ String cloudNextEvent;
 
 void initProperties() {
     ArduinoCloud.setBoardId(SECRET_DEVICE_ID);
-    ArduinoCloud.setSecretDeviceKey(SECRET_DEVICE_KEY);
+    // Secret Key is stored in board NVM during provisioning — no need to set here
     ArduinoCloud.addProperty(cloudStatus,      READ, ON_CHANGE, 30 * SECONDS);
     ArduinoCloud.addProperty(cloudOutsideTemp, READ, ON_CHANGE, 30 * SECONDS);
     ArduinoCloud.addProperty(cloudLastSync,    READ, ON_CHANGE, 30 * SECONDS);

@@ -7,6 +7,6 @@
 #define SECRET_PASS  "your-wifi-password"
 
 // ─── Arduino Cloud ────────────────────────────────────────────────────────────
-// Device ID and Secret Key from create.arduino.cc/iot/devices
-#define SECRET_DEVICE_ID   "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-#define SECRET_DEVICE_KEY  "your-secret-device-key"
+// Device ID from create.arduino.cc/iot/devices
+// Secret Key is stored in board NVM during provisioning — not needed here
+#define SECRET_DEVICE_ID  "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
