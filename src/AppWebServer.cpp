@@ -57,6 +57,14 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .modal .actions{display:flex;gap:.75rem;margin-top:1.25rem;justify-content:flex-end}
 .btn-cancel{background:#374151;color:#d1d5db;border:none;padding:.5rem 1rem;border-radius:.4rem;cursor:pointer}
 .btn-save{background:#4c1d95;color:#c4b5fd;border:none;padding:.5rem 1rem;border-radius:.4rem;cursor:pointer;font-weight:600}
+.nobo-warn{background:#450a0a;border:1px solid #dc2626;color:#fca5a5;padding:.6rem 1.5rem;margin:0 1.5rem 1rem;border-radius:.5rem;font-size:.8rem}
+.badge-err{background:#450a0a;color:#fca5a5}
+.badge-pend{background:#451a03;color:#fde68a;padding:.15rem .4rem}
+.events{margin-bottom:.75rem}
+.ev{display:flex;align-items:center;gap:.4rem;padding:.2rem 0;border-bottom:1px solid #1e293b}
+.ev:last-child{border-bottom:none}
+.ev-t{color:#64748b;font-size:.72rem;white-space:nowrap;min-width:65px}
+.ev-s{color:#cbd5e1;font-size:.78rem;flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 </style>
 </head>
 <body>
@@ -88,8 +96,9 @@ function openSettings(){document.getElementById('settingsModal').classList.add('
 
 // ─── Constructor / begin ──────────────────────────────────────────────────────
 
-AppWebServer::AppWebServer(ScheduleEngine& e, WeatherService& w)
-    : _server(80), _engine(e), _weather(w), _started(false) {
+AppWebServer::AppWebServer(ScheduleEngine& e, WeatherService& w,
+                           NoboController& n, CalendarManager& c)
+    : _server(80), _engine(e), _weather(w), _nobo(n), _cal(c), _started(false) {
     _password[0] = '\0';
 }
 
@@ -185,19 +194,29 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
     _sendHeader(client, 200, "text/html");
     _sendProgmem(client, HTML_HEAD);
 
-    // Header bar
+    bool noboOk = _nobo.isConnected();
+
+    // Header
     client.print(F("<header><h1>NoboGoogleCal</h1><div class=\"badges\">"));
     client.print(F("<span class=\"badge badge-ok\">WiFi ✓</span>"));
-
-    // Last sync
-    char syncBuf[32];
-    strncpy(syncBuf, _engine.nextEventString(), sizeof(syncBuf) - 1);  // reuse engine
-    client.print(F("<span class=\"badge badge-info\">Sync: "));
-    // Show last sync from CalendarManager via engine's statusString
-    client.print(F("active"));
-    client.print(F("</span>"));
-    client.print(F("<button class=\"settings-btn\" onclick=\"openSettings()\">⚙ Settings</button>"));
+    client.print(noboOk
+        ? F("<span class=\"badge badge-ok\">Nobø: Online</span>")
+        : F("<span class=\"badge badge-err\">Nobø: Offline</span>"));
+    const char* lastSync = _cal.lastSyncTime();
+    if (lastSync[0]) {
+        client.print(F("<span class=\"badge badge-info\">Sync: "));
+        client.print(lastSync);
+        client.print(F("</span>"));
+    }
+    client.print(F("<button class=\"settings-btn\" onclick=\"openSettings()\">&#9881; Settings</button>"));
     client.print(F("</div></header>"));
+
+    // Nobø offline banner
+    if (!noboOk) {
+        client.print(F("<div class=\"nobo-warn\">"));
+        client.print(F("&#9888; Nobø hub not reachable &mdash; calendar events are fetched but heating is not being controlled"));
+        client.print(F("</div>"));
+    }
 
     // Weather card
     client.print(F("<div class=\"weather\">"));
@@ -207,7 +226,7 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
     client.print(tempBuf);
     client.print(F(" °C</div><div class=\"info\">"));
     if (!_weather.isAvailable()) {
-        client.print(F("Weather API unavailable — using seasonal fallback<br>"));
+        client.print(F("Weather API unavailable &mdash; using seasonal fallback<br>"));
     }
     client.print(F("Comfort heating: "));
     client.print(_weather.comfortAllowed()
@@ -217,53 +236,108 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
 
     // Zone cards
     client.print(F("<div class=\"zones\">"));
-
-    // We need zone count — stored in engine; access via status string heuristic
-    // Better: use a zone count accessor (added via cast trick below)
-    // Since we only have _engine, we iterate using zoneStatus() up to MAX_ZONES
-    // and stop at first STATUS_ECO from an unregistered zone (pragmatic approach)
-    for (int i = 0; i < MAX_ZONES; i++) {
-        HeatingStatus st = _engine.zoneStatus(i);
-        // zoneStatus returns ECO for out-of-range zones — we can't distinguish easily
-        // without a zoneCount() method. For now, the engine exposes it indirectly via
-        // statusString. Parse the status string to count pipes.
-        // A simpler fix: add a getter. Done below via the statusString pipe count.
-        const char* statusStr = statusName(st);
-
-        client.print(F("<div class=\"zone\">"));
-        client.print(F("<div class=\"zone-header\">"));
-        client.print(F("<span class=\"zone-name\">Zone "));
-        client.print(i + 1);
+    for (int i = 0; i < _engine.zoneCount(); i++) {
+        const char* statusStr = statusName(_engine.zoneStatus(i));
+        client.print(F("<div class=\"zone\"><div class=\"zone-header\">"));
+        client.print(F("<span class=\"zone-name\">"));
+        client.print(_engine.zoneName(i));
         client.print(F("</span><span class=\"status status-"));
         client.print(statusStr);
         client.print(F("\">"));
         client.print(statusStr);
-        client.print(F("</span></div>"));
+        client.print(F("</span></div><div class=\"zone-body\">"));
+        _printZoneEvents(client, i, !noboOk);
+        _printZoneTimeline(client, i);
+        client.print(F("</div></div>"));
+    }
+    client.print(F("</div>"));
+    client.print(F("<footer>NoboGoogleCal &mdash; Arduino Uno R4 WiFi</footer>"));
+    _sendProgmem(client, HTML_FOOT);
+}
 
-        client.print(F("<div class=\"zone-body\">"));
-        client.print(F("<div class=\"zone-next\">Next: <strong>"));
-        client.print(_engine.nextEventString());
-        client.print(F("</strong></div>"));
+// ─── Zone event list ──────────────────────────────────────────────────────────
 
-        // 7-day mini-timeline placeholder (filled by /api/status JS update)
-        client.print(F("<div class=\"timeline\" id=\"tl"));
-        client.print(i);
-        client.print(F("\">"));
-        for (int d = 0; d < 7; d++) {
-            const char* days[7] = {"Mo","Tu","We","Th","Fr","Sa","Su"};
-            client.print(F("<div class=\"day-col\"><div class=\"day-label\">"));
-            client.print(days[d]);
-            client.print(F("</div><div class=\"day-block\"></div></div>"));
+void AppWebServer::_printZoneEvents(WiFiClient& client, int zoneIndex, bool pending) {
+    static const char* dn[7] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+    time_t now = time(nullptr);
+    int shown = 0;
+    time_t lastStart = 0;
+
+    client.print(F("<div class=\"events\">"));
+
+    for (int pass = 0; pass < 3; pass++) {
+        time_t best = 0;
+        int    bestIdx = -1;
+        for (int e = 0; e < MAX_EVENTS_PER_ZONE * MAX_ZONES; e++) {
+            const CalEvent& ev = _cal.events()[e];
+            if (!ev.valid || ev.zoneIndex != (uint8_t)zoneIndex) continue;
+            if (ev.end <= now) continue;
+            if (ev.start <= lastStart && lastStart != 0) continue;
+            if (best == 0 || ev.start < best) { best = ev.start; bestIdx = e; }
         }
-        client.print(F("</div></div></div>"));
+        if (bestIdx < 0) break;
 
-        // Stop after showing zones that appear in the status string
-        if (i >= 1) break;  // safe default: 2 zones; proper fix via zoneCount()
+        const CalEvent& ev = _cal.events()[bestIdx];
+        lastStart = ev.start;
+
+        struct tm utcTm = *gmtime(&ev.start);
+        time_t localStart = ev.start + norwayOffsetSeconds(&utcTm);
+        struct tm lTm = *gmtime(&localStart);
+
+        char timeBuf[12];
+        snprintf(timeBuf, sizeof(timeBuf), "%s %02d:%02d",
+                 dn[lTm.tm_wday], lTm.tm_hour, lTm.tm_min);
+
+        client.print(F("<div class=\"ev\"><span class=\"ev-t\">"));
+        client.print(timeBuf);
+        client.print(F("</span><span class=\"ev-s\">"));
+        client.print(ev.summary);
+        client.print(F("</span>"));
+        if (pending) client.print(F("<span class=\"badge badge-pend\">Pending</span>"));
+        client.print(F("</div>"));
+        shown++;
+    }
+
+    if (shown == 0) {
+        client.print(F("<div class=\"ev\"><span class=\"ev-t\">—</span>"));
+        client.print(F("<span class=\"ev-s\">No upcoming events</span></div>"));
     }
 
     client.print(F("</div>"));
-    client.print(F("<footer>NoboGoogleCal — Arduino Uno R4 WiFi</footer>"));
-    _sendProgmem(client, HTML_FOOT);
+}
+
+// ─── 7-day timeline ───────────────────────────────────────────────────────────
+
+void AppWebServer::_printZoneTimeline(WiFiClient& client, int zoneIndex) {
+    static const char* dn[7] = {"Su","Mo","Tu","We","Th","Fr","Sa"};
+    time_t now   = time(nullptr);
+    time_t today = now - (now % 86400UL);
+
+    client.print(F("<div class=\"timeline\">"));
+    for (int d = 0; d < 7; d++) {
+        time_t dayStart = today + (time_t)d * 86400L;
+        time_t dayEnd   = dayStart + 86400L;
+        struct tm dTm = *gmtime(&dayStart);
+
+        bool hasEvent   = false;
+        bool activeNow  = false;
+        for (int e = 0; e < MAX_EVENTS_PER_ZONE * MAX_ZONES; e++) {
+            const CalEvent& ev = _cal.events()[e];
+            if (!ev.valid || ev.zoneIndex != (uint8_t)zoneIndex) continue;
+            if (ev.start < dayEnd && ev.end > dayStart) {
+                hasEvent = true;
+                if (ev.start <= now && ev.end > now) activeNow = true;
+            }
+        }
+
+        client.print(F("<div class=\"day-col\"><div class=\"day-label\">"));
+        client.print(dn[dTm.tm_wday]);
+        client.print(F("</div><div class=\"day-block"));
+        if (activeNow)     client.print(F(" comfort active"));
+        else if (hasEvent) client.print(F(" comfort"));
+        client.print(F("\"></div></div>"));
+    }
+    client.print(F("</div>"));
 }
 
 // ─── JSON status ──────────────────────────────────────────────────────────────
@@ -275,7 +349,11 @@ void AppWebServer::_serveStatus(WiFiClient& client) {
     client.print(_engine.statusString());
     client.print(F("\",\"nextEvent\":\""));
     client.print(_engine.nextEventString());
-    client.print(F("\",\"temp\":"));
+    client.print(F("\",\"lastSync\":\""));
+    client.print(_cal.lastSyncTime());
+    client.print(F("\",\"noboConnected\":"));
+    client.print(_nobo.isConnected() ? F("true") : F("false"));
+    client.print(F(",\"temp\":"));
 
     char tempBuf[10];
     dtostrf(_weather.currentTemp(), 4, 1, tempBuf);
@@ -305,6 +383,14 @@ void AppWebServer::_serveSettings(WiFiClient& client, const char* body, int len)
     if (strlen(newPw) > 0) {
         strncpy(_password, newPw, sizeof(_password) - 1);
         Serial.println(F("[Web] Password updated"));
+    }
+
+    char newCity[32] = {};
+    _parseBody(body, len, "weather_city", newCity, sizeof(newCity));
+    if (strlen(newCity) > 0) {
+        _weather.setCity(newCity);
+        Serial.print(F("[Web] Weather city -> "));
+        Serial.println(newCity);
     }
 
     // Redirect back to dashboard

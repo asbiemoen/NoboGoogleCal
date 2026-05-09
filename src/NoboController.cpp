@@ -25,17 +25,16 @@ bool NoboController::begin(const char* ip, const char* serial) {
     _profileCount         = 0;
     _overrideCount        = 0;
 
-    Serial.print(F("[Nobo] Connecting to "));
-    Serial.println(_ip);
-    return _connect();
+    return true;
 }
 
 void NoboController::tick() {
     if (!_connected) {
         uint32_t now = millis();
-        if (now - _lastReconnectAttempt > 30000UL) {
+        if (_lastReconnectAttempt == 0 || now - _lastReconnectAttempt > 30000UL) {
             _lastReconnectAttempt = now;
-            Serial.println(F("[Nobo] Reconnecting..."));
+            Serial.print(F("[Nobo] Connecting to "));
+            Serial.println(_ip);
             _connect();
         }
         return;
@@ -201,6 +200,13 @@ bool NoboController::_connect() {
     if (!_readAllData()) {
         Serial.println(F("[Nobo] Failed to read initial data"));
     }
+
+    // Start override IDs beyond any the hub already knows about
+    _nextOverrideId = 1;
+    for (int i = 0; i < _overrideCount; i++) {
+        if (_overrides[i].id >= _nextOverrideId)
+            _nextOverrideId = _overrides[i].id + 1;
+    }
     return true;
 }
 
@@ -229,6 +235,8 @@ bool NoboController::_readLine(char* buf, size_t len, uint32_t timeoutMs) {
                 return pos > 0;
             }
             if (pos < len - 1) buf[pos++] = c;
+        } else {
+            delay(1);  // yield to other work instead of spinning
         }
     }
     buf[pos] = '\0';

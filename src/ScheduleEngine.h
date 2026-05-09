@@ -11,9 +11,15 @@ public:
     void begin(const ZoneConfig* zones, int zoneCount);
     void tick();
 
-    HeatingStatus zoneStatus(int i)      const;
-    const char*   statusString()         const;  // cloud variable
-    const char*   nextEventString()      const;  // cloud variable
+    int           zoneCount()             const { return _zoneCount; }
+    const char*   zoneName(int i)         const;
+    HeatingStatus zoneStatus(int i)       const;
+    const char*   statusString()          const;
+    const char*   nextEventString()       const;
+
+    // Returns true if zone i has a comfort boundary within withinSecs seconds.
+    // changeAt: epoch of the boundary. toComfort: true=turning on, false=turning off.
+    bool nextChangeForZone(int i, time_t withinSecs, time_t& changeAt, bool& toComfort) const;
 
 private:
     NoboController& _nobo;

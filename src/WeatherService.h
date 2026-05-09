@@ -12,6 +12,12 @@ public:
     bool  comfortAllowed() const { return _comfortAllowed; }
     float currentTemp()    const { return _currentTemp; }
     bool  isAvailable()    const { return _available; }
+    const char* city()     const { return _city; }
+
+    void setCity(const char* city) {
+        strncpy(_city, city, sizeof(_city) - 1);
+        _lastFetchMs = 0;  // trigger immediate re-fetch on next tick()
+    }
 
 private:
     char     _city[32];

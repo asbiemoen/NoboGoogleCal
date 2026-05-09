@@ -31,6 +31,11 @@ void ScheduleEngine::tick() {
     _buildNextEventString();
 }
 
+const char* ScheduleEngine::zoneName(int i) const {
+    if (i < 0 || i >= _zoneCount) return "";
+    return _zones[i].name;
+}
+
 HeatingStatus ScheduleEngine::zoneStatus(int i) const {
     if (i < 0 || i >= _zoneCount) return STATUS_ECO;
     return _states[i].current;
@@ -38,6 +43,45 @@ HeatingStatus ScheduleEngine::zoneStatus(int i) const {
 
 const char* ScheduleEngine::statusString()    const { return _statusBuf; }
 const char* ScheduleEngine::nextEventString() const { return _nextEventBuf; }
+
+bool ScheduleEngine::nextChangeForZone(int i, time_t withinSecs, time_t& changeAt, bool& toComfort) const {
+    if (i < 0 || i >= _zoneCount) return false;
+    if (!_weather.comfortAllowed()) return false;
+
+    time_t now = time(nullptr);
+    time_t comfortUntil;
+    bool   inComfort = _comfortWindowActive(i, comfortUntil);
+
+    if (inComfort) {
+        time_t secsLeft = comfortUntil - now;
+        if (secsLeft > 0 && secsLeft <= withinSecs) {
+            changeAt  = comfortUntil;
+            toComfort = false;
+            return true;
+        }
+    } else {
+        uint8_t preheat = _zones[i].preheatHours;
+        const CalEvent* events = _cal.events();
+        time_t nearest = 0;
+
+        for (int j = 0; j < MAX_EVENTS_PER_ZONE * MAX_ZONES; j++) {
+            const CalEvent& ev = events[j];
+            if (!ev.valid || ev.zoneIndex != (uint8_t)i) continue;
+            time_t preheatFrom = ev.start - (time_t)preheat * 3600;
+            if (preheatFrom > now && preheatFrom - now <= withinSecs) {
+                if (nearest == 0 || preheatFrom < nearest)
+                    nearest = preheatFrom;
+            }
+        }
+
+        if (nearest > 0) {
+            changeAt  = nearest;
+            toComfort = true;
+            return true;
+        }
+    }
+    return false;
+}
 
 // ─── Private ─────────────────────────────────────────────────────────────────
 

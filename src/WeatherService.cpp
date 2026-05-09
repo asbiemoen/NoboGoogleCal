@@ -16,13 +16,11 @@ void WeatherService::begin(const char* city, const char* apiKey) {
     _comfortAllowed = !_summerFallback();
     _available      = false;
     _lastFetchMs    = 0;
-
-    // Fetch immediately at startup
-    _fetch();
 }
 
 void WeatherService::tick() {
-    if (millis() - _lastFetchMs < WEATHER_INTERVAL_MS) return;
+    if (_lastFetchMs == 0 && millis() < 30000UL) return; // let system settle first
+    if (_lastFetchMs != 0 && millis() - _lastFetchMs < WEATHER_INTERVAL_MS) return;
     _fetch();
 }
 
@@ -58,21 +56,13 @@ bool WeatherService::_fetch() {
 
     http.skipResponseHeaders();
 
-    // Read up to 512 bytes — the current-weather response is small
-    char body[512];
-    int  pos      = 0;
-    uint32_t dl   = millis() + 6000UL;
-    while ((http.connected() || http.available()) && millis() < dl) {
-        if (!http.available()) { delay(10); continue; }
-        char c = (char)http.read();
-        if (pos < (int)sizeof(body) - 1) body[pos++] = c;
-    }
-    body[pos] = '\0';
+    // Stream JSON directly — avoids a large stack buffer and handles any response size
+    StaticJsonDocument<32>  filter;
+    filter["main"]["temp"] = true;
+    StaticJsonDocument<64>  doc;
+    DeserializationError jerr = deserializeJson(doc, http,
+                                                DeserializationOption::Filter(filter));
     http.stop();
-
-    // Parse JSON: {"main":{"temp": 12.3, ...}, ...}
-    StaticJsonDocument<512> doc;
-    DeserializationError jerr = deserializeJson(doc, body, pos);
     if (jerr) {
         Serial.print(F("[Weather] JSON error: "));
         Serial.println(jerr.c_str());
