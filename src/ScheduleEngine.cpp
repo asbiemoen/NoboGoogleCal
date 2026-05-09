@@ -31,6 +31,11 @@ void ScheduleEngine::tick() {
     _buildNextEventString();
 }
 
+const char* ScheduleEngine::zoneName(int i) const {
+    if (i < 0 || i >= _zoneCount) return "";
+    return _zones[i].name;
+}
+
 HeatingStatus ScheduleEngine::zoneStatus(int i) const {
     if (i < 0 || i >= _zoneCount) return STATUS_ECO;
     return _states[i].current;

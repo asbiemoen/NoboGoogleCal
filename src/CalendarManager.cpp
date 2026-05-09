@@ -218,6 +218,7 @@ void CalendarManager::_expandRRule(time_t base, time_t baseEnd, int zoneIndex) {
     // Supports: FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR,SA,SU
     //           FREQ=DAILY
     //           FREQ=WEEKLY (no BYDAY = same weekday as DTSTART)
+    //           UNTIL=  and COUNT=  qualifiers
     time_t now   = time(nullptr);
     time_t limit = now + 7 * 24 * 3600;
     time_t dur   = baseEnd - base;
@@ -230,49 +231,61 @@ void CalendarManager::_expandRRule(time_t base, time_t baseEnd, int zoneIndex) {
     bool daily  = (strncmp(freq, "DAILY",  5) == 0);
     if (!weekly && !daily) return;
 
+    // Parse UNTIL — stop generating occurrences after this time
+    time_t until = 0;
+    const char* untilP = strstr(_rRule, "UNTIL=");
+    if (untilP) until = _parseDateTime(untilP + 6);
+
+    // Parse COUNT — stop after N occurrences
+    int maxCount = INT_MAX;
+    const char* countP = strstr(_rRule, "COUNT=");
+    if (countP) maxCount = atoi(countP + 6);
+
     int step = daily ? 1 : 7;
 
     // BYDAY handling for weekly
     const char* byDay = strstr(_rRule, "BYDAY=");
-    const char* days[7] = {"MO","TU","WE","TH","FR","SA","SU"};
-    // struct tm wday: 0=Sun,1=Mon,...,6=Sat; ICS BYDAY: MO=Mon(1)...SU=Sun(0)
-    int isoWday[7] = {1,2,3,4,5,6,0};  // MO=1,...,SU=0 in tm
+    const char* days[7]  = {"MO","TU","WE","TH","FR","SA","SU"};
+    int         isoWday[7] = {1,2,3,4,5,6,0};  // MO=1,...,SU=0 in tm_wday
 
-    for (time_t t = now - 7 * 24 * 3600; t < limit; t += 86400) {
-        struct tm* tm_t = gmtime(&t);
+    // gmtime() returns a pointer to a single static buffer — copy before second call
+    struct tm baseTm = *gmtime(&base);
+
+    int generated = 0;
+    for (time_t t = now - 7 * 24 * 3600; t < limit && generated < maxCount; t += 86400) {
+        struct tm tm_day = *gmtime(&t);  // copy out of static buffer immediately
 
         bool matches = false;
         if (daily) {
             matches = true;
         } else if (byDay) {
             for (int d = 0; d < 7; d++) {
-                if (strstr(byDay + 6, days[d]) && tm_t->tm_wday == isoWday[d]) {
+                if (strstr(byDay + 6, days[d]) && tm_day.tm_wday == isoWday[d]) {
                     matches = true; break;
                 }
             }
         } else {
-            // Same weekday as DTSTART
-            struct tm* baseTm = gmtime(&base);
-            matches = (tm_t->tm_wday == baseTm->tm_wday);
+            matches = (tm_day.tm_wday == baseTm.tm_wday);
         }
 
         if (!matches) continue;
 
-        // Build event time: same H:M:S as base, but on this date
-        struct tm* baseTm = gmtime(&base);
-        struct tm evTm    = *tm_t;
-        evTm.tm_hour      = baseTm->tm_hour;
-        evTm.tm_min       = baseTm->tm_min;
-        evTm.tm_sec       = baseTm->tm_sec;
-        time_t evStart    = mktime(&evTm);
-        time_t evEnd      = evStart + dur;
+        // Build event time: same H:M:S as base, but on this calendar date
+        struct tm evTm = tm_day;
+        evTm.tm_hour   = baseTm.tm_hour;
+        evTm.tm_min    = baseTm.tm_min;
+        evTm.tm_sec    = baseTm.tm_sec;
+        time_t evStart = mktime(&evTm);
+        time_t evEnd   = evStart + dur;
 
-        if (!_inNext7Days(evStart)) continue;
+        if (until > 0 && evStart > until) break;
+        if (!_inNext7Days(evStart)) { if (!daily) t += (step - 1) * 86400; continue; }
 
         for (int i = 0; i < MAX_EVENTS_PER_ZONE * MAX_ZONES; i++) {
             if (!_events[i].valid) {
                 _events[i] = { evStart, evEnd, {}, (uint8_t)zoneIndex, true };
                 strncpy(_events[i].summary, _evSummary, sizeof(_events[i].summary) - 1);
+                generated++;
                 break;
             }
         }

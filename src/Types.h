@@ -55,8 +55,21 @@ inline const char* statusName(HeatingStatus s) {
     }
 }
 
-// Norway timezone offset in seconds (CET=3600, CEST=7200)
-// Simple rule: CEST applies from last Sunday in March to last Sunday in October
+// Norway timezone offset in seconds (CET=3600, CEST=7200).
+// CEST: last Sunday in March (02:00) → last Sunday in October (03:00).
 inline int norwayOffsetSeconds(const struct tm* t) {
-    return (t->tm_mon >= 3 && t->tm_mon <= 9) ? 7200 : 3600;
+    int mon  = t->tm_mon;   // 0=Jan
+    int mday = t->tm_mday;
+    int wday = t->tm_wday;  // 0=Sun
+
+    if (mon < 2 || mon > 9) return 3600;   // Jan, Feb, Nov, Dec
+    if (mon > 2 && mon < 9) return 7200;   // Apr – Sep
+
+    // March (2) and October (9): compute day-of-month of last Sunday.
+    // Both months have 31 days. wday of the 31st = (wday + (31 - mday)) % 7.
+    int wdayOf31 = (wday + (31 - mday)) % 7;
+    int lastSun  = 31 - wdayOf31;
+
+    if (mon == 2) return (mday >= lastSun) ? 7200 : 3600;  // March
+    return             (mday >= lastSun) ? 3600 : 7200;    // October
 }

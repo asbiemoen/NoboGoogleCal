@@ -218,22 +218,13 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
     // Zone cards
     client.print(F("<div class=\"zones\">"));
 
-    // We need zone count — stored in engine; access via status string heuristic
-    // Better: use a zone count accessor (added via cast trick below)
-    // Since we only have _engine, we iterate using zoneStatus() up to MAX_ZONES
-    // and stop at first STATUS_ECO from an unregistered zone (pragmatic approach)
-    for (int i = 0; i < MAX_ZONES; i++) {
-        HeatingStatus st = _engine.zoneStatus(i);
-        // zoneStatus returns ECO for out-of-range zones — we can't distinguish easily
-        // without a zoneCount() method. For now, the engine exposes it indirectly via
-        // statusString. Parse the status string to count pipes.
-        // A simpler fix: add a getter. Done below via the statusString pipe count.
-        const char* statusStr = statusName(st);
+    for (int i = 0; i < _engine.zoneCount(); i++) {
+        const char*   statusStr = statusName(_engine.zoneStatus(i));
 
         client.print(F("<div class=\"zone\">"));
         client.print(F("<div class=\"zone-header\">"));
-        client.print(F("<span class=\"zone-name\">Zone "));
-        client.print(i + 1);
+        client.print(F("<span class=\"zone-name\">"));
+        client.print(_engine.zoneName(i));
         client.print(F("</span><span class=\"status status-"));
         client.print(statusStr);
         client.print(F("\">"));
@@ -245,7 +236,6 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
         client.print(_engine.nextEventString());
         client.print(F("</strong></div>"));
 
-        // 7-day mini-timeline placeholder (filled by /api/status JS update)
         client.print(F("<div class=\"timeline\" id=\"tl"));
         client.print(i);
         client.print(F("\">"));
@@ -256,9 +246,6 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
             client.print(F("</div><div class=\"day-block\"></div></div>"));
         }
         client.print(F("</div></div></div>"));
-
-        // Stop after showing zones that appear in the status string
-        if (i >= 1) break;  // safe default: 2 zones; proper fix via zoneCount()
     }
 
     client.print(F("</div>"));
@@ -305,6 +292,14 @@ void AppWebServer::_serveSettings(WiFiClient& client, const char* body, int len)
     if (strlen(newPw) > 0) {
         strncpy(_password, newPw, sizeof(_password) - 1);
         Serial.println(F("[Web] Password updated"));
+    }
+
+    char newCity[32] = {};
+    _parseBody(body, len, "weather_city", newCity, sizeof(newCity));
+    if (strlen(newCity) > 0) {
+        _weather.setCity(newCity);
+        Serial.print(F("[Web] Weather city -> "));
+        Serial.println(newCity);
     }
 
     // Redirect back to dashboard

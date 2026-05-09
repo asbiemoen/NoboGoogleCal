@@ -25,16 +25,22 @@ static AppWebServer    webServer(engine, weather);
 static LEDDisplay      led(engine, weather);
 
 // ─── WiFi ─────────────────────────────────────────────────────────────────────
-static void connectWifi() {
+// Returns true if connected. Makes one bounded attempt (20 × 500 ms = 10 s).
+static bool connectWifi() {
     Serial.print(F("Connecting to WiFi"));
     WiFi.begin(SECRET_SSID, SECRET_PASS);
-    while (WiFi.status() != WL_CONNECTED) {
+    for (uint8_t i = 0; i < 20 && WiFi.status() != WL_CONNECTED; i++) {
         delay(500);
         Serial.print('.');
     }
     Serial.println();
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println(F("WiFi connect failed"));
+        return false;
+    }
     Serial.print(F("IP: "));
     Serial.println(WiFi.localIP());
+    return true;
 }
 
 // ─── setup / loop ─────────────────────────────────────────────────────────────
@@ -42,7 +48,7 @@ void setup() {
     Serial.begin(9600);
     delay(1500);
 
-    connectWifi();
+    while (!connectWifi()) { /* retry until network is up */ }
 
     ntp.begin();
     ntp.update();
@@ -68,7 +74,7 @@ void setup() {
 void loop() {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println(F("WiFi lost — reconnecting..."));
-        connectWifi();
+        connectWifi();  // one bounded attempt; retries on next loop() tick if still down
     }
 
     ntp.update();

@@ -11,9 +11,11 @@ public:
     void begin(const ZoneConfig* zones, int zoneCount);
     void tick();
 
-    HeatingStatus zoneStatus(int i)      const;
-    const char*   statusString()         const;  // cloud variable
-    const char*   nextEventString()      const;  // cloud variable
+    int           zoneCount()             const { return _zoneCount; }
+    const char*   zoneName(int i)         const;
+    HeatingStatus zoneStatus(int i)       const;
+    const char*   statusString()          const;
+    const char*   nextEventString()       const;
 
 private:
     NoboController& _nobo;
