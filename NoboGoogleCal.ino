@@ -80,6 +80,24 @@ void setup() {
     struct timeval tv = { epoch, 0 };
     settimeofday(&tv, nullptr);
 
+    // Print time so we can verify it on the serial monitor
+    {
+        time_t now = time(nullptr);
+        struct tm* utc = gmtime(&now);
+        int off = norwayOffsetSeconds(utc);
+        time_t localNow = now + off;
+        struct tm* loc = gmtime(&localNow);
+        char tbuf[40];
+        snprintf(tbuf, sizeof(tbuf), "Time (UTC):   %04d-%02d-%02d %02d:%02d:%02d",
+                 utc->tm_year+1900, utc->tm_mon+1, utc->tm_mday,
+                 utc->tm_hour, utc->tm_min, utc->tm_sec);
+        Serial.println(tbuf);
+        snprintf(tbuf, sizeof(tbuf), "Time (local): %04d-%02d-%02d %02d:%02d:%02d (UTC+%d)",
+                 loc->tm_year+1900, loc->tm_mon+1, loc->tm_mday,
+                 loc->tm_hour, loc->tm_min, loc->tm_sec, off / 3600);
+        Serial.println(tbuf);
+    }
+
     engine.begin(ZONES, ZONE_COUNT);
     webServer.begin(WEB_PASSWORD);
     led.begin();
