@@ -212,12 +212,26 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
 
     bool noboOk = _nobo.isConnected();
 
+    // Current board time (local)
+    time_t now = time(nullptr);
+    struct tm nowUtc = *gmtime(&now);
+    int localOff = norwayOffsetSeconds(&nowUtc);
+    time_t localNow = now + (time_t)localOff;
+    struct tm lNow = *gmtime(&localNow);
+    char boardTimeBuf[28];
+    snprintf(boardTimeBuf, sizeof(boardTimeBuf), "%02d.%02d.%04d %02d:%02d UTC+%d",
+             lNow.tm_mday, lNow.tm_mon+1, lNow.tm_year+1900,
+             lNow.tm_hour, lNow.tm_min, localOff/3600);
+
     // Header
     client.print(F("<header><h1>NoboGoogleCal</h1><div class=\"badges\">"));
     client.print(F("<span class=\"badge badge-ok\">WiFi ✓</span>"));
     client.print(noboOk
         ? F("<span class=\"badge badge-ok\">Nobø: Online</span>")
         : F("<span class=\"badge badge-err\">Nobø: Offline</span>"));
+    client.print(F("<span class=\"badge badge-info\">"));
+    client.print(boardTimeBuf);
+    client.print(F("</span>"));
     const char* lastSync = _cal.lastSyncTime();
     if (lastSync[0]) {
         client.print(F("<span class=\"badge badge-info\">Sync: "));

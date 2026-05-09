@@ -75,27 +75,50 @@ void setup() {
     }
     Serial.println(epoch >= 1577836800UL ? F(" OK") : F(" failed"));
 
+    Serial.print(F("NTP epoch:    ")); Serial.println((unsigned long)epoch);
+
     RTCTime startTime(epoch);
     RTC.setTime(startTime);
     struct timeval tv = { epoch, 0 };
     settimeofday(&tv, nullptr);
 
-    // Print time so we can verify it on the serial monitor
+    // Verify both clock sources so we can pinpoint any mismatch
     {
-        time_t now = time(nullptr);
-        struct tm* utc = gmtime(&now);
+        time_t timeNow = time(nullptr);
+        RTCTime rtcNow;
+        RTC.getTime(rtcNow);
+        time_t rtcEpoch = (time_t)rtcNow.getUnixTime();
+
+        char tbuf[48];
+        snprintf(tbuf, sizeof(tbuf), "time() epoch: %lu", (unsigned long)timeNow);
+        Serial.println(tbuf);
+        snprintf(tbuf, sizeof(tbuf), "RTC epoch:    %lu", (unsigned long)rtcEpoch);
+        Serial.println(tbuf);
+
+        // Use whichever source looks valid; prefer time() since it's what the
+        // rest of the code calls. If it didn't get set, fall back to RTC.
+        time_t best = (timeNow >= 1577836800UL) ? timeNow : rtcEpoch;
+
+        struct tm* utc = gmtime(&best);
         int off = norwayOffsetSeconds(utc);
-        time_t localNow = now + off;
+        time_t localNow = best + off;
         struct tm* loc = gmtime(&localNow);
-        char tbuf[40];
-        snprintf(tbuf, sizeof(tbuf), "Time (UTC):   %04d-%02d-%02d %02d:%02d:%02d",
+
+        snprintf(tbuf, sizeof(tbuf), "UTC:   %04d-%02d-%02d %02d:%02d:%02d",
                  utc->tm_year+1900, utc->tm_mon+1, utc->tm_mday,
                  utc->tm_hour, utc->tm_min, utc->tm_sec);
         Serial.println(tbuf);
-        snprintf(tbuf, sizeof(tbuf), "Time (local): %04d-%02d-%02d %02d:%02d:%02d (UTC+%d)",
+        snprintf(tbuf, sizeof(tbuf), "Local: %04d-%02d-%02d %02d:%02d:%02d (UTC+%d)",
                  loc->tm_year+1900, loc->tm_mon+1, loc->tm_mday,
                  loc->tm_hour, loc->tm_min, loc->tm_sec, off / 3600);
         Serial.println(tbuf);
+
+        // If time() is wrong but RTC is correct, fix time() via settimeofday
+        if (timeNow < 1577836800UL && rtcEpoch >= 1577836800UL) {
+            Serial.println(F("time() stale — resyncing from RTC"));
+            struct timeval tv2 = { rtcEpoch, 0 };
+            settimeofday(&tv2, nullptr);
+        }
     }
 
     engine.begin(ZONES, ZONE_COUNT);
