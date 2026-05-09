@@ -1,4 +1,5 @@
 #include "AppWebServer.h"
+#include "AppLog.h"
 #include <Arduino.h>
 #include <stdio.h>
 #include <string.h>
@@ -65,6 +66,9 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .ev:last-child{border-bottom:none}
 .ev-t{color:#64748b;font-size:.72rem;white-space:nowrap;min-width:65px}
 .ev-s{color:#cbd5e1;font-size:.78rem;flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.logbox{background:#0d1117;border:1px solid #1e293b;border-radius:.5rem;padding:.5rem 1rem;margin:0 1.5rem 1.5rem;font-family:monospace;font-size:.73rem;line-height:1.7}
+.log-row{color:#4b5563}
+.log-row:last-child{color:#9ca3af}
 </style>
 </head>
 <body>
@@ -251,6 +255,20 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
         client.print(F("</div></div>"));
     }
     client.print(F("</div>"));
+
+    // Activity log
+    client.print(F("<div class=\"logbox\">"));
+    if (AppLog::count() == 0) {
+        client.print(F("<div class=\"log-row\">No activity yet</div>"));
+    } else {
+        for (int i = AppLog::count() - 1; i >= 0; i--) {
+            client.print(F("<div class=\"log-row\">"));
+            client.print(AppLog::entry(i));
+            client.print(F("</div>"));
+        }
+    }
+    client.print(F("</div>"));
+
     client.print(F("<footer>NoboGoogleCal &mdash; Arduino Uno R4 WiFi</footer>"));
     _sendProgmem(client, HTML_FOOT);
 }

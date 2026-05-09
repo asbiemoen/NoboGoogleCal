@@ -1,4 +1,5 @@
 #include "WeatherService.h"
+#include "AppLog.h"
 #include <Arduino.h>
 #include <WiFiSSLClient.h>
 #include <ArduinoHttpClient.h>
@@ -41,6 +42,7 @@ bool WeatherService::_fetch() {
         Serial.println(F("[Weather] HTTP GET failed"));
         _available      = false;
         _comfortAllowed = !_summerFallback();
+        AppLog::add("Weather: fetch failed");
         return false;
     }
 
@@ -51,6 +53,7 @@ bool WeatherService::_fetch() {
         http.stop();
         _available      = false;
         _comfortAllowed = !_summerFallback();
+        AppLog::add("Weather: HTTP error");
         return false;
     }
 
@@ -68,6 +71,7 @@ bool WeatherService::_fetch() {
         Serial.println(jerr.c_str());
         _available      = false;
         _comfortAllowed = !_summerFallback();
+        AppLog::add("Weather: JSON error");
         return false;
     }
 
@@ -81,6 +85,11 @@ bool WeatherService::_fetch() {
     Serial.print(_currentTemp);
     Serial.print(F(" C — comfort "));
     Serial.println(_comfortAllowed ? F("allowed") : F("suppressed"));
+
+    char msg[APP_LOG_WIDTH];
+    snprintf(msg, sizeof(msg), "Weather: %.1fC%s",
+             _currentTemp, _comfortAllowed ? "" : " (warm)");
+    AppLog::add(msg);
     return true;
 }
 

@@ -22,6 +22,7 @@ private:
 
     uint32_t _lastSyncMs;
     int      _nextZoneToSync;  // staggered fetch: one zone per minute
+    uint32_t _lastSyncPeriod[MAX_ZONES];
 
     void _syncZone(int zoneIndex);
     bool _fetchIcs(const char* url, int zoneIndex);

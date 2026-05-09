@@ -1,4 +1,5 @@
 #include "NoboController.h"
+#include "AppLog.h"
 #include <Arduino.h>
 #include <string.h>
 #include <stdlib.h>
@@ -168,6 +169,7 @@ bool NoboController::_connect() {
 
     if (!_client.connect(_ip, NOBO_PORT)) {
         Serial.println(F("[Nobo] TCP connect failed"));
+        AppLog::add("Nobø: connect failed");
         return false;
     }
 
@@ -193,6 +195,7 @@ bool NoboController::_connect() {
     }
 
     Serial.println(F("[Nobo] Connected, loading data..."));
+    AppLog::add("Nobø: connected");
     _connected      = true;
     _lastKeepAlive  = millis();
 
@@ -213,6 +216,7 @@ bool NoboController::_connect() {
 void NoboController::_disconnect() {
     _client.stop();
     _connected = false;
+    AppLog::add("Nobø: disconnected");
 }
 
 bool NoboController::_send(const char* cmd) {

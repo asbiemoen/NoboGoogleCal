@@ -1,4 +1,5 @@
 #include "CalendarManager.h"
+#include "AppLog.h"
 #include <Arduino.h>
 #include <WiFiSSLClient.h>
 #include <ArduinoHttpClient.h>
@@ -16,7 +17,8 @@ void CalendarManager::begin(const ZoneConfig* zones, int zoneCount) {
     _nextZoneToSync = 0;
     _lastSync[0]    = '\0';
 
-    // Mark all events invalid
+    for (int i = 0; i < MAX_ZONES; i++) _lastSyncPeriod[i] = 0xFFFFFFFFUL;
+
     for (int i = 0; i < MAX_EVENTS_PER_ZONE * MAX_ZONES; i++) {
         _events[i].valid = false;
     }
@@ -37,10 +39,9 @@ void CalendarManager::tick() {
 
     // Check if we haven't already synced this zone in this period
     uint32_t periodId = minutesSinceBoot / syncPeriod;
-    static uint32_t lastSyncPeriod[MAX_ZONES] = {};
-    if (lastSyncPeriod[scheduledZone] == periodId) return;
+    if (_lastSyncPeriod[scheduledZone] == periodId) return;
 
-    lastSyncPeriod[scheduledZone] = periodId;
+    _lastSyncPeriod[scheduledZone] = periodId;
     _syncZone(scheduledZone);
 
     // Update lastSync timestamp
@@ -54,23 +55,28 @@ void CalendarManager::_syncZone(int zoneIndex) {
     Serial.print(F("[Cal] Syncing zone "));
     Serial.println(_zones[zoneIndex].name);
 
-    // Clear existing events for this zone
-    int count = 0;
     for (int i = 0; i < MAX_EVENTS_PER_ZONE * MAX_ZONES; i++) {
-        if (_events[i].valid && _events[i].zoneIndex == (uint8_t)zoneIndex) {
+        if (_events[i].valid && _events[i].zoneIndex == (uint8_t)zoneIndex)
             _events[i].valid = false;
-        }
     }
 
-    _fetchIcs(_zones[zoneIndex].icsUrl, zoneIndex);
+    bool ok = _fetchIcs(_zones[zoneIndex].icsUrl, zoneIndex);
 
-    // Recount
     _eventCount = 0;
+    int zoneEvCount = 0;
     for (int i = 0; i < MAX_EVENTS_PER_ZONE * MAX_ZONES; i++) {
-        if (_events[i].valid) _eventCount++;
+        if (!_events[i].valid) continue;
+        _eventCount++;
+        if (_events[i].zoneIndex == (uint8_t)zoneIndex) zoneEvCount++;
     }
     Serial.print(F("[Cal] Total valid events: "));
     Serial.println(_eventCount);
+
+    char msg[APP_LOG_WIDTH];
+    if (ok) snprintf(msg, sizeof(msg), "Cal Z%d: %d event%s",
+                     zoneIndex + 1, zoneEvCount, zoneEvCount == 1 ? "" : "s");
+    else    snprintf(msg, sizeof(msg), "Cal Z%d: fetch failed", zoneIndex + 1);
+    AppLog::add(msg);
 }
 
 bool CalendarManager::_fetchIcs(const char* url, int zoneIndex) {
