@@ -12,6 +12,7 @@ static const char HTML_HEAD[] PROGMEM = R"html(<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="60">
 <title>NoboGoogleCal</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -35,7 +36,7 @@ header h1{font-size:1.1rem;font-weight:600;color:#a78bfa;letter-spacing:.05em}
 .status{font-size:.8rem;font-weight:700;padding:.35rem .75rem;border-radius:9999px}
 .status-COMFORT{background:#7c2d12;color:#fb923c}
 .status-ECO{background:#0c4a6e;color:#38bdf8}
-.status-AWAY{background:#374151;color:#9ca3af}
+.status-AWAY{background:#1e3a5f;color:#60a5fa}
 .status-NORMAL{background:#374151;color:#9ca3af}
 .zone-body{padding:.75rem 1.25rem 1.25rem}
 .zone-next{font-size:.82rem;color:#94a3b8;margin-bottom:.75rem;line-height:1.5}
@@ -64,11 +65,18 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .events{margin-bottom:.75rem}
 .ev{display:flex;align-items:center;gap:.4rem;padding:.2rem 0;border-bottom:1px solid #1e293b}
 .ev:last-child{border-bottom:none}
-.ev-t{color:#64748b;font-size:.72rem;white-space:nowrap;min-width:65px}
+.ev-t{color:#64748b;font-size:.72rem;white-space:nowrap;min-width:100px}
 .ev-s{color:#cbd5e1;font-size:.78rem;flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .logbox{background:#0d1117;border:1px solid #1e293b;border-radius:.5rem;padding:.5rem 1rem;margin:0 1.5rem 1.5rem;font-family:monospace;font-size:.73rem;line-height:1.7}
 .log-row{color:#4b5563}
-.log-row:last-child{color:#9ca3af}
+.log-row:first-child{color:#9ca3af}
+.log-row-err{color:#f87171!important}
+.hero{background:#1a1f2e;border:1px solid #4c1d95;border-radius:.75rem;padding:.85rem 1.5rem;margin:1.5rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.4rem}
+.hero-status{font-size:.95rem;font-weight:600;color:#e2e8f0}
+.hero-next{font-size:.8rem;color:#a78bfa}
+.zone-warn{font-size:.73rem;color:#f87171;padding:.2rem 1.25rem;background:#450a0a}
+.section-title{font-size:.72rem;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:.08em;padding:0 1.5rem .4rem}
+@media(max-width:480px){header{flex-wrap:wrap;gap:.5rem}}
 </style>
 </head>
 <body>
@@ -215,6 +223,14 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
     client.print(F("<button class=\"settings-btn\" onclick=\"openSettings()\">&#9881; Settings</button>"));
     client.print(F("</div></header>"));
 
+    // Hero summary
+    client.print(F("<div class=\"hero\">"));
+    client.print(F("<span class=\"hero-status\">"));
+    client.print(_engine.statusString()[0] ? _engine.statusString() : "—");
+    client.print(F("</span><span class=\"hero-next\">"));
+    client.print(_engine.nextEventString());
+    client.print(F("</span></div>"));
+
     // Nobø offline banner
     if (!noboOk) {
         client.print(F("<div class=\"nobo-warn\">"));
@@ -229,6 +245,8 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
     client.print(F("<div class=\"temp\">"));
     client.print(tempBuf);
     client.print(F(" °C</div><div class=\"info\">"));
+    client.print(_weather.city());
+    client.print(F("<br>"));
     if (!_weather.isAvailable()) {
         client.print(F("Weather API unavailable &mdash; using seasonal fallback<br>"));
     }
@@ -249,7 +267,11 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
         client.print(statusStr);
         client.print(F("\">"));
         client.print(statusStr);
-        client.print(F("</span></div><div class=\"zone-body\">"));
+        client.print(F("</span></div>"));
+        if (noboOk && _engine.zoneNoboId(i) < 0) {
+            client.print(F("<div class=\"zone-warn\">&#9888; Zone not found in Nob&oslash; hub</div>"));
+        }
+        client.print(F("<div class=\"zone-body\">"));
         _printZoneEvents(client, i, !noboOk);
         _printZoneTimeline(client, i);
         client.print(F("</div></div>"));
@@ -257,13 +279,17 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
     client.print(F("</div>"));
 
     // Activity log
+    client.print(F("<p class=\"section-title\">Activity log</p>"));
     client.print(F("<div class=\"logbox\">"));
     if (AppLog::count() == 0) {
         client.print(F("<div class=\"log-row\">No activity yet</div>"));
     } else {
         for (int i = AppLog::count() - 1; i >= 0; i--) {
-            client.print(F("<div class=\"log-row\">"));
-            client.print(AppLog::entry(i));
+            const char* e = AppLog::entry(i);
+            bool isErr = strstr(e, "failed") || strstr(e, "timeout") || strstr(e, "TCP err");
+            client.print(isErr ? F("<div class=\"log-row log-row-err\">")
+                               : F("<div class=\"log-row\">"));
+            client.print(e);
             client.print(F("</div>"));
         }
     }
@@ -302,12 +328,20 @@ void AppWebServer::_printZoneEvents(WiFiClient& client, int zoneIndex, bool pend
         time_t localStart = ev.start + norwayOffsetSeconds(&utcTm);
         struct tm lTm = *gmtime(&localStart);
 
+        struct tm utcEndTm = *gmtime(&ev.end);
+        time_t localEnd = ev.end + norwayOffsetSeconds(&utcEndTm);
+        struct tm lEndTm = *gmtime(&localEnd);
+
         char timeBuf[12];
         snprintf(timeBuf, sizeof(timeBuf), "%s %02d:%02d",
                  dn[lTm.tm_wday], lTm.tm_hour, lTm.tm_min);
+        char endBuf[6];
+        snprintf(endBuf, sizeof(endBuf), "%02d:%02d", lEndTm.tm_hour, lEndTm.tm_min);
 
         client.print(F("<div class=\"ev\"><span class=\"ev-t\">"));
         client.print(timeBuf);
+        client.print(F("&ndash;"));
+        client.print(endBuf);
         client.print(F("</span><span class=\"ev-s\">"));
         client.print(ev.summary);
         client.print(F("</span>"));
@@ -328,14 +362,19 @@ void AppWebServer::_printZoneEvents(WiFiClient& client, int zoneIndex, bool pend
 
 void AppWebServer::_printZoneTimeline(WiFiClient& client, int zoneIndex) {
     static const char* dn[7] = {"Su","Mo","Tu","We","Th","Fr","Sa"};
-    time_t now   = time(nullptr);
-    time_t today = now - (now % 86400UL);
+    time_t now = time(nullptr);
+    // Compute midnight in Norwegian local time so column 0 is always "today" locally
+    struct tm nowUtcTm = *gmtime(&now);
+    int localOff = norwayOffsetSeconds(&nowUtcTm);
+    time_t localNow = now + (time_t)localOff;
+    time_t today = (localNow - (localNow % 86400UL)) - (time_t)localOff;
 
     client.print(F("<div class=\"timeline\">"));
     for (int d = 0; d < 7; d++) {
         time_t dayStart = today + (time_t)d * 86400L;
         time_t dayEnd   = dayStart + 86400L;
-        struct tm dTm = *gmtime(&dayStart);
+        time_t localDayStart = dayStart + (time_t)localOff;
+        struct tm dTm = *gmtime(&localDayStart);
 
         bool hasEvent   = false;
         bool activeNow  = false;
