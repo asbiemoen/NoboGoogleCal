@@ -76,6 +76,8 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .hero-next{font-size:.8rem;color:#a78bfa}
 .zone-warn{font-size:.73rem;color:#f87171;padding:.2rem 1.25rem;background:#450a0a}
 .section-title{font-size:.72rem;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:.08em;padding:0 1.5rem .4rem}
+.sync-bar{padding:.25rem 1.5rem .75rem;display:flex;align-items:center}
+.sync-pw{background:#0f1117;border:1px solid #2d3748;color:#e2e8f0;padding:.4rem .75rem;border-radius:.4rem;font-size:.82rem;margin-right:.5rem;width:140px}
 @media(max-width:480px){header{flex-wrap:wrap;gap:.5rem}}
 </style>
 </head>
@@ -192,6 +194,8 @@ void AppWebServer::_handleClient(WiFiClient& client) {
         _serveStatus(client);
     } else if (isPost && strstr(reqLine, "POST /api/settings")) {
         _serveSettings(client, body, bodyLen);
+    } else if (isPost && strstr(reqLine, "POST /sync")) {
+        _serveSync(client, body, bodyLen);
     } else {
         _sendHeader(client, 404, "text/plain");
         client.print(F("Not found"));
@@ -230,6 +234,12 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
     client.print(F("</span><span class=\"hero-next\">"));
     client.print(_engine.nextEventString());
     client.print(F("</span></div>"));
+
+    // Manual sync form
+    client.print(F("<div class=\"sync-bar\"><form method=\"POST\" action=\"/sync\">"));
+    client.print(F("<input type=\"password\" name=\"pw\" placeholder=\"Password\" class=\"sync-pw\">"));
+    client.print(F("<button type=\"submit\" class=\"settings-btn\">&#x21bb; Sync now</button>"));
+    client.print(F("</form></div>"));
 
     // Nobø offline banner
     if (!noboOk) {
@@ -505,6 +515,23 @@ void AppWebServer::_parseBody(const char* body, int /*len*/, const char* key, ch
     while (*p && *p != '&' && i < (int)sizeof(raw) - 1) raw[i++] = *p++;
     raw[i] = '\0';
     urlDecode(out, outLen, raw);
+}
+
+// ─── Manual sync POST ─────────────────────────────────────────────────────────
+
+void AppWebServer::_serveSync(WiFiClient& client, const char* body, int len) {
+    char pw[64] = {};
+    _parseBody(body, len, "pw", pw, sizeof(pw));
+
+    if (strncmp(pw, _password, sizeof(_password)) != 0) {
+        _sendHeader(client, 401, "text/html");
+        client.print(F("<html><body style='background:#0f1117;color:#f87171;font-family:monospace;padding:2rem'>"));
+        client.print(F("Wrong password. <a href='/' style='color:#a78bfa'>Back</a></body></html>"));
+        return;
+    }
+
+    _cal.forceSyncAll();
+    client.print(F("HTTP/1.1 303 See Other\r\nLocation: /\r\nContent-Length: 0\r\n\r\n"));
 }
 
 bool AppWebServer::_checkAuth(const char* /*headers*/) { return false; }

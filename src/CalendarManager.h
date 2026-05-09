@@ -7,6 +7,7 @@ class CalendarManager {
 public:
     void begin(const ZoneConfig* zones, int zoneCount);
     void tick();
+    void forceSyncAll();
 
     // Returns all valid events; caller should read until valid==false
     const CalEvent* events()      const { return _events; }
@@ -23,9 +24,12 @@ private:
     uint32_t _lastSyncMs;
     int      _nextZoneToSync;  // staggered fetch: one zone per minute
     uint32_t _lastSyncPeriod[MAX_ZONES];
+    uint32_t _lastEepromSaveDay;
 
     void _syncZone(int zoneIndex);
     bool _fetchIcs(const char* url, int zoneIndex);
+    void _saveToEeprom();
+    void _loadFromEeprom();
 
     // ICS line-by-line parser state
     bool   _inEvent;

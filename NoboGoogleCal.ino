@@ -65,10 +65,20 @@ void setup() {
 
     RTC.begin();
     ntp.begin();
-    ntp.update();
 
-    RTCTime startTime(static_cast<time_t>(ntp.getEpochTime()));
+    // Retry until we get a valid epoch (> 2020-01-01). closes #41
+    Serial.print(F("NTP sync"));
+    time_t epoch = 0;
+    for (int i = 0; i < 20 && epoch < 1577836800UL; i++) {
+        if (ntp.forceUpdate()) epoch = (time_t)ntp.getEpochTime();
+        if (epoch < 1577836800UL) { delay(500); Serial.print('.'); }
+    }
+    Serial.println(epoch >= 1577836800UL ? F(" OK") : F(" failed"));
+
+    RTCTime startTime(epoch);
     RTC.setTime(startTime);
+    struct timeval tv = { epoch, 0 };
+    settimeofday(&tv, nullptr);
 
     engine.begin(ZONES, ZONE_COUNT);
     webServer.begin(WEB_PASSWORD);
