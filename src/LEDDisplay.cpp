@@ -2,12 +2,15 @@
 #include <Arduino.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 LEDDisplay::LEDDisplay(ScheduleEngine& e, WeatherService& w)
-    : _engine(e), _weather(w), _frameIndex(0), _lastFrameMs(0), _errorState(false) {}
+    : _engine(e), _weather(w), _frameIndex(0), _lastFrameMs(0),
+      _bootMs(0), _errorState(false) {}
 
 void LEDDisplay::begin() {
     _matrix.begin();
+    _bootMs = millis();
     Serial.println(F("[LED] Matrix initialised"));
 }
 
@@ -15,48 +18,80 @@ void LEDDisplay::tick() {
     if (millis() - _lastFrameMs < LED_FRAME_DURATION_MS) return;
     _lastFrameMs = millis();
 
+    // Priority 1: Boot window — scroll IP address
+    if (millis() - _bootMs < LED_BOOT_WINDOW_MS) {
+        _showIP();
+        return;
+    }
+
+    // Priority 2: Imminent heating change — countdown
+    time_t nearestChangeAt  = 0;
+    bool   nearestToComfort = false;
+    int    nearestZone      = -1;
+
+    for (int i = 0; i < _engine.zoneCount(); i++) {
+        time_t changeAt;
+        bool   toComfort;
+        if (_engine.nextChangeForZone(i, LED_COUNTDOWN_SECS, changeAt, toComfort)) {
+            if (nearestChangeAt == 0 || changeAt < nearestChangeAt) {
+                nearestChangeAt  = changeAt;
+                nearestToComfort = toComfort;
+                nearestZone      = i;
+            }
+        }
+    }
+
+    if (nearestZone >= 0) {
+        _showCountdown(nearestZone, nearestChangeAt, nearestToComfort);
+        return;
+    }
+
+    // Priority 3: Normal frame rotation
     if (_errorState) {
         _showError();
         return;
     }
 
     _showFrame(_frameIndex);
-    _frameIndex++;
-
-    // Rotate through: zone 0, zone 1, weather, next event
-    uint8_t totalFrames = 4;
-    if (_frameIndex >= totalFrames) _frameIndex = 0;
+    uint8_t totalFrames = (uint8_t)(_engine.zoneCount() + 2);  // zones + weather + next event
+    if (++_frameIndex >= totalFrames) _frameIndex = 0;
 }
 
 void LEDDisplay::_showFrame(uint8_t index) {
     char msg[64];
+    int  zc = _engine.zoneCount();
 
-    switch (index) {
-        case 0:
-        case 1: {
-            // Zone status — one zone per frame
-            int zi = index;  // frame 0 = zone 0, frame 1 = zone 1
-            const char* st = statusName(_engine.zoneStatus(zi));
-            snprintf(msg, sizeof(msg), "Z%d: %s", zi + 1, st);
-            break;
-        }
-        case 2: {
-            // Outside temperature
-            char tempBuf[8];
-            dtostrf(_weather.currentTemp(), 4, 1, tempBuf);
-            snprintf(msg, sizeof(msg), "OUT: %s C", tempBuf);
-            if (!_weather.comfortAllowed()) strncat(msg, " WARM", sizeof(msg) - strlen(msg) - 1);
-            break;
-        }
-        case 3: {
-            // Next event countdown
-            strncpy(msg, _engine.nextEventString(), sizeof(msg) - 1);
-            break;
-        }
-        default:
-            strncpy(msg, "NoboGCal", sizeof(msg) - 1);
+    if (index < (uint8_t)zc) {
+        snprintf(msg, sizeof(msg), "Z%d:%s", index + 1, statusName(_engine.zoneStatus(index)));
+    } else if (index == (uint8_t)zc) {
+        char tempBuf[8];
+        dtostrf(_weather.currentTemp(), 4, 1, tempBuf);
+        snprintf(msg, sizeof(msg), "OUT:%sC", tempBuf);
+        if (!_weather.comfortAllowed())
+            strncat(msg, " WARM", sizeof(msg) - strlen(msg) - 1);
+    } else {
+        strncpy(msg, _engine.nextEventString(), sizeof(msg) - 1);
+        msg[sizeof(msg) - 1] = '\0';
     }
 
+    _scrollText(msg);
+}
+
+void LEDDisplay::_showIP() {
+    IPAddress ip = WiFi.localIP();
+    char msg[24];
+    snprintf(msg, sizeof(msg), "IP:%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+    _scrollText(msg);
+}
+
+void LEDDisplay::_showCountdown(int zoneIndex, time_t changeAt, bool toComfort) {
+    long secsLeft = (long)(changeAt - time(nullptr));
+    if (secsLeft < 0) secsLeft = 0;
+    char msg[24];
+    snprintf(msg, sizeof(msg), "Z%d %s %lds",
+             zoneIndex + 1,
+             toComfort ? "ON" : "OFF",
+             secsLeft);
     _scrollText(msg);
 }
 
@@ -72,14 +107,12 @@ void LEDDisplay::_scrollText(const char* text) {
 }
 
 void LEDDisplay::_showError() {
-    // Display a blinking "!" pattern
     _matrix.beginDraw();
     _matrix.stroke(0xFFFFFFFF);
 
-    // Draw exclamation mark in centre
     uint8_t frame[8][12] = {};
-    for (int r = 1; r <= 5; r++) frame[r][5] = 1;  // vertical bar
-    frame[7][5] = 1;                                  // dot
+    for (int r = 1; r <= 5; r++) frame[r][5] = 1;
+    frame[7][5] = 1;
 
     for (int r = 0; r < 8; r++)
         for (int c = 0; c < 12; c++)
