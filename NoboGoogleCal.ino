@@ -1,8 +1,11 @@
 #include <WiFiS3.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
+#include <ArduinoIoTCloud.h>
+#include <Arduino_ConnectionHandler.h>
 
 #include "arduino_secrets.h"
+#include "thingProperties.h"
 #include "src/Types.h"
 #include "src/NoboController.h"
 #include "src/CalendarManager.h"
@@ -23,6 +26,18 @@ static WeatherService  weather;
 static ScheduleEngine  engine(nobo, calendar, weather);
 static AppWebServer    webServer(engine, weather);
 static LEDDisplay      led(engine, weather);
+
+// ─── Cloud variable sync ──────────────────────────────────────────────────────
+static uint32_t _lastCloudSyncMs = 0;
+
+static void syncCloudVariables() {
+    if (millis() - _lastCloudSyncMs < 30000UL) return;
+    _lastCloudSyncMs   = millis();
+    cloudStatus        = engine.statusString();
+    cloudOutsideTemp   = weather.currentTemp();
+    cloudLastSync      = calendar.lastSyncTime();
+    cloudNextEvent     = engine.nextEventString();
+}
 
 // ─── WiFi ─────────────────────────────────────────────────────────────────────
 // Returns true if connected. Makes one bounded attempt (20 × 500 ms = 10 s).
@@ -68,14 +83,16 @@ void setup() {
     webServer.begin(WEB_PASSWORD);
     led.begin();
 
+    initProperties();
+    ArduinoCloud.begin(ArduinoIoTPreferredConnection);
+    ArduinoCloud.printDebugInfo();
+
     Serial.println(F("NoboGoogleCal ready."));
 }
 
 void loop() {
-    if (WiFi.status() != WL_CONNECTED) {
-        Serial.println(F("WiFi lost — reconnecting..."));
-        connectWifi();  // one bounded attempt; retries on next loop() tick if still down
-    }
+    // ArduinoCloud handles WiFi reconnection internally
+    ArduinoCloud.update();
 
     ntp.update();
 
@@ -85,4 +102,6 @@ void loop() {
     calendar.tick();
     weather.tick();
     nobo.tick();
+
+    syncCloudVariables();
 }
