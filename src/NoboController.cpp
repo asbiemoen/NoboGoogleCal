@@ -25,17 +25,16 @@ bool NoboController::begin(const char* ip, const char* serial) {
     _profileCount         = 0;
     _overrideCount        = 0;
 
-    Serial.print(F("[Nobo] Connecting to "));
-    Serial.println(_ip);
-    return _connect();
+    return true;
 }
 
 void NoboController::tick() {
     if (!_connected) {
         uint32_t now = millis();
-        if (now - _lastReconnectAttempt > 30000UL) {
+        if (_lastReconnectAttempt == 0 || now - _lastReconnectAttempt > 30000UL) {
             _lastReconnectAttempt = now;
-            Serial.println(F("[Nobo] Reconnecting..."));
+            Serial.print(F("[Nobo] Connecting to "));
+            Serial.println(_ip);
             _connect();
         }
         return;

@@ -1,12 +1,13 @@
 #pragma once
+#include <time.h>
 #include <Arduino.h>
 
 // ─── Capacity constants ───────────────────────────────────────────────────────
 #define MAX_ZONES           8
-#define MAX_EVENTS_PER_ZONE 20
-#define MAX_NOBO_ZONES      16
-#define MAX_NOBO_PROFILES   16
-#define MAX_NOBO_OVERRIDES  16
+#define MAX_EVENTS_PER_ZONE 10
+#define MAX_NOBO_ZONES      8
+#define MAX_NOBO_PROFILES   8
+#define MAX_NOBO_OVERRIDES  8
 
 // ─── Timing ───────────────────────────────────────────────────────────────────
 #define SYNC_INTERVAL_MS    (60UL * 60UL * 1000UL)         // 1 hour
