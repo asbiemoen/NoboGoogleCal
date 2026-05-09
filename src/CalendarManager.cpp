@@ -121,16 +121,17 @@ bool CalendarManager::_fetchIcs(const char* url, int zoneIndex) {
     char line[128];
     int  pos     = 0;
     bool timeout = false;
-    uint32_t deadline = millis() + 15000UL;
+    uint32_t deadline = millis() + 30000UL;
 
     while (http.connected() || http.available()) {
         if (millis() > deadline) { timeout = true; break; }
-        if (!http.available()) { delay(10); continue; }
+        if (!http.available()) { delay(1); continue; }
 
         char c = (char)http.read();
         if (c == '\n') {
             if (pos > 0 && line[pos - 1] == '\r') pos--;
             line[pos] = '\0';
+            if (strcmp(line, "END:VCALENDAR") == 0) break;
             _processLine(line, zoneIndex);
             pos = 0;
         } else if (pos < (int)sizeof(line) - 1) {
