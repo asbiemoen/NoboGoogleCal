@@ -548,8 +548,10 @@ void AppWebServer::_serveSync(WiFiClient& client, const char* body, int len) {
         return;
     }
 
-    _cal.forceSyncAll();
+    // Redirect before syncing — browser navigates away immediately while sync runs
     client.print(F("HTTP/1.1 303 See Other\r\nLocation: /\r\nContent-Length: 0\r\n\r\n"));
+    client.flush();
+    _cal.forceSyncAll();
 }
 
 bool AppWebServer::_checkAuth(const char* /*headers*/) { return false; }

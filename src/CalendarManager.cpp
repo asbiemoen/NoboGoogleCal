@@ -148,7 +148,7 @@ bool CalendarManager::_fetchIcs(const char* url, int zoneIndex) {
     char line[128];
     int  pos     = 0;
     bool timeout = false;
-    uint32_t deadline = millis() + 30000UL;
+    uint32_t deadline = millis() + 600000UL;  // 10 min — ICS can be large
 
     while (http.connected() || http.available()) {
         if (millis() > deadline) { timeout = true; break; }
