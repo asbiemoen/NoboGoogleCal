@@ -4,7 +4,8 @@
 // Zone types (ZoneConfig, ECO, etc.) are defined in src/ScheduleEngine.h
 
 // ─── Nobo Energy Hub ──────────────────────────────────────────────────────────
-#define NOBO_HUB_IP   "192.168.x.x"   // Local IP of your Nobø Energy Hub
+#define NOBO_HUB_IP     "192.168.x.x"      // Local IP of your Nobø Energy Hub
+#define NOBO_HUB_SERIAL "123456789012"     // 12-digit serial on the hub label (only first 3 digits used in handshake)
 
 // ─── Web interface ────────────────────────────────────────────────────────────
 #define WEB_PASSWORD  "password"       // Password for the settings page
