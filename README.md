@@ -1,6 +1,6 @@
 # NoboGoogleCal
 
-Control [Nobø Energy Hub](https://www.nobo.no/en/) heating zones automatically using Google Calendar — running on an **Arduino Uno R4 WiFi** with **Arduino Cloud** support.
+Control [Nobø Energy Hub](https://www.nobo.no/en/) heating zones automatically using Google Calendar — running on an **Arduino Uno R4 WiFi**.
 
 ## How it works
 
@@ -15,9 +15,6 @@ Arduino Uno R4 WiFi
   ├── WeatherService  →  OpenWeatherMap API
   ├── WebServer       →  Local browser dashboard
   └── LEDDisplay      →  Built-in LED matrix
-        │
-        ▼ (Arduino Cloud)
-  OTA updates + remote monitoring
 ```
 
 ## Features
@@ -33,7 +30,7 @@ Arduino Uno R4 WiFi
 - **Local web dashboard** — shows zone status and the next 7 days of events; open on the local network
 - **Password-protected settings** — change per-zone settings via the web UI (default password: `password`)
 - **LED display** — scrolling status on the Arduino's built-in LED matrix
-- **Arduino Cloud** — OTA firmware updates and remote monitoring via cloud variables
+- **OTA updates** — firmware updates over local WiFi using ArduinoOTA
 - **Startup provisioning** — creates Nobø weekly programs automatically if they do not already exist
 
 ## Hardware
@@ -42,11 +39,10 @@ Arduino Uno R4 WiFi
 |---|---|
 | Microcontroller | Arduino Uno R4 WiFi |
 | Heating controller | Nobø Energy Hub (local network, TCP port 27779) |
-| Cloud | Arduino Cloud (OTA + monitoring) |
 
 ## Libraries required
 
-- `ArduinoIoTCloud` + `Arduino_ConnectionHandler` — Arduino Cloud / OTA
+- `ArduinoOTA` — OTA firmware updates over local WiFi
 - `ArduinoHttpClient` — HTTPS requests
 - `ArduinoJson` — JSON parsing (weather API)
 - `Arduino_LED_Matrix` + `ArduinoGraphics` — LED matrix display
@@ -57,7 +53,7 @@ Arduino Uno R4 WiFi
 ```
 NoboGoogleCal/
 ├── NoboGoogleCal.ino       # Main sketch
-├── arduino_secrets.h       # WiFi credentials — gitignored (Arduino Cloud)
+├── arduino_secrets.h       # WiFi credentials — gitignored
 ├── config.h                # Installation-specific config — gitignored
 ├── config.example.h        # Config template with placeholders — committed
 ├── src/
@@ -72,29 +68,16 @@ NoboGoogleCal/
 
 ## Setup
 
-### 1. Arduino Cloud
+### 1. WiFi credentials
 
-Create a new Thing in [Arduino Cloud](https://create.arduino.cc/iot). The following variables will be auto-generated in `thingProperties.h`:
-
-| Variable | Type | Description |
-|---|---|---|
-| `statusMessage` | String | Current system status |
-| `outsideTemp` | float | Outside temperature from weather API |
-| `lastSync` | String | Timestamp of last calendar sync |
-| `nextEvent` | String | Next upcoming event across all zones |
-
-OTA is enabled automatically when the device is connected to Arduino Cloud.
-
-### 2. WiFi credentials
-
-Arduino Cloud generates `arduino_secrets.h` automatically. It is gitignored.
+Copy `arduino_secrets.example.h` to `arduino_secrets.h` and fill in your values:
 
 ```cpp
-#define SECRET_SSID           "your-wifi-ssid"
-#define SECRET_OPTIONAL_PASS  "your-wifi-password"
+#define SECRET_SSID  "your-wifi-ssid"
+#define SECRET_PASS  "your-wifi-password"
 ```
 
-### 3. Installation config
+### 2. Installation config
 
 Copy `config.example.h` to `config.h` and fill in your values:
 
@@ -107,9 +90,13 @@ Copy `config.example.h` to `config.h` and fill in your values:
 
 Add your zones — one per Google Calendar. Get the private ICS URL from **Google Calendar → Settings → Integrate calendar → Secret address in iCal format**.
 
-### 4. Nobø hub
+### 3. Nobø hub
 
 The Arduino must be on the same local network as the Nobø Energy Hub. Zone-to-weekly-program assignment is done manually in the Nobø app once; the Arduino manages the weekly programs from that point on.
+
+### 4. OTA updates
+
+OTA is available over local WiFi via the ArduinoOTA library. Hostname is `nobogooglecal`, password is the same as `WEB_PASSWORD`. Use the Arduino IDE or `arduino-cli` to upload over the network.
 
 ## Web dashboard
 
