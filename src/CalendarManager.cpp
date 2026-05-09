@@ -1,6 +1,7 @@
 #include "CalendarManager.h"
 #include "AppLog.h"
 #include <Arduino.h>
+#include <EEPROM.h>
 #include <WiFiSSLClient.h>
 #include <ArduinoHttpClient.h>
 #include <string.h>
@@ -9,19 +10,39 @@
 #include <stdio.h>
 #include <time.h>
 
+// ─── EEPROM layout ────────────────────────────────────────────────────────────
+// [0]   magic 0xCA
+// [1]   magic 0x1E
+// [2-3] uint16_t count
+// [4+]  EepromEvent[] (34 bytes each)
+
+static const uint8_t EEPROM_MAGIC_0 = 0xCA;
+static const uint8_t EEPROM_MAGIC_1 = 0x1E;
+
+struct EepromEvent {
+    uint32_t start;
+    uint32_t end;
+    uint8_t  zoneIndex;
+    char     summary[24];
+    uint8_t  _pad;  // total: 34 bytes
+};
+
 void CalendarManager::begin(const ZoneConfig* zones, int zoneCount) {
-    _zones          = zones;
-    _zoneCount      = zoneCount;
-    _eventCount     = 0;
-    _lastSyncMs     = 0;
-    _nextZoneToSync = 0;
-    _lastSync[0]    = '\0';
+    _zones              = zones;
+    _zoneCount          = zoneCount;
+    _eventCount         = 0;
+    _lastSyncMs         = 0;
+    _nextZoneToSync     = 0;
+    _lastSync[0]        = '\0';
+    _lastEepromSaveDay  = 0;
 
     for (int i = 0; i < MAX_ZONES; i++) _lastSyncPeriod[i] = 0xFFFFFFFFUL;
 
     for (int i = 0; i < MAX_EVENTS_PER_ZONE * MAX_ZONES; i++) {
         _events[i].valid = false;
     }
+
+    _loadFromEeprom();
 }
 
 void CalendarManager::tick() {
@@ -77,6 +98,12 @@ void CalendarManager::_syncZone(int zoneIndex) {
         snprintf(msg, sizeof(msg), "Cal Z%d: %d event%s",
                  zoneIndex + 1, zoneEvCount, zoneEvCount == 1 ? "" : "s");
         AppLog::add(msg);
+
+        uint32_t today = (uint32_t)(time(nullptr) / 86400UL);
+        if (_lastEepromSaveDay != today) {
+            _saveToEeprom();
+            _lastEepromSaveDay = today;
+        }
     }
     // failure already logged by _fetchIcs with specific reason
 }
@@ -319,4 +346,89 @@ bool CalendarManager::_inNext7Days(time_t t) const {
     time_t now   = time(nullptr);
     time_t limit = now + 7 * 24 * 3600;
     return (t >= now - 24 * 3600) && (t < limit);
+}
+
+void CalendarManager::_saveToEeprom() {
+    int maxCount = MAX_EVENTS_PER_ZONE * MAX_ZONES;
+    uint16_t count = 0;
+
+    for (int i = 0; i < maxCount; i++) {
+        if (!_events[i].valid) continue;
+        EepromEvent ee;
+        ee.start     = (uint32_t)_events[i].start;
+        ee.end       = (uint32_t)_events[i].end;
+        ee.zoneIndex = _events[i].zoneIndex;
+        ee._pad      = 0;
+        strncpy(ee.summary, _events[i].summary, sizeof(ee.summary) - 1);
+        ee.summary[sizeof(ee.summary) - 1] = '\0';
+        EEPROM.put(4 + count * (int)sizeof(EepromEvent), ee);
+        count++;
+    }
+
+    EEPROM.write(0, EEPROM_MAGIC_0);
+    EEPROM.write(1, EEPROM_MAGIC_1);
+    EEPROM.put(2, count);
+
+    Serial.print(F("[Cal] EEPROM: saved "));
+    Serial.print(count);
+    Serial.println(F(" events"));
+    char msg[APP_LOG_WIDTH];
+    snprintf(msg, sizeof(msg), "Cal: saved %d to EEPROM", (int)count);
+    AppLog::add(msg);
+}
+
+void CalendarManager::_loadFromEeprom() {
+    if (EEPROM.read(0) != EEPROM_MAGIC_0 || EEPROM.read(1) != EEPROM_MAGIC_1) return;
+
+    uint16_t count = 0;
+    EEPROM.get(2, count);
+    int maxCount = MAX_EVENTS_PER_ZONE * MAX_ZONES;
+    if (count > (uint16_t)maxCount) count = (uint16_t)maxCount;
+
+    time_t now = time(nullptr);
+    int loaded = 0;
+    EepromEvent ee;
+    for (uint16_t i = 0; i < count; i++) {
+        EEPROM.get(4 + i * (int)sizeof(EepromEvent), ee);
+        if ((time_t)ee.end < now) continue;  // skip events already past
+        for (int j = 0; j < maxCount; j++) {
+            if (!_events[j].valid) {
+                _events[j].start     = (time_t)ee.start;
+                _events[j].end       = (time_t)ee.end;
+                _events[j].zoneIndex = ee.zoneIndex;
+                strncpy(_events[j].summary, ee.summary, sizeof(_events[j].summary) - 1);
+                _events[j].valid = true;
+                _eventCount++;
+                loaded++;
+                break;
+            }
+        }
+    }
+
+    if (loaded > 0) {
+        Serial.print(F("[Cal] EEPROM: loaded "));
+        Serial.print(loaded);
+        Serial.println(F(" events"));
+        char msg[APP_LOG_WIDTH];
+        snprintf(msg, sizeof(msg), "Cal: loaded %d from EEPROM", loaded);
+        AppLog::add(msg);
+    }
+}
+
+void CalendarManager::forceSyncAll() {
+    Serial.println(F("[Cal] Force sync all zones"));
+    for (int i = 0; i < _zoneCount; i++) {
+        _syncZone(i);
+    }
+    _saveToEeprom();
+    _lastEepromSaveDay = (uint32_t)(time(nullptr) / 86400UL);
+
+    // Prevent auto-sync from immediately re-syncing in this period
+    uint32_t periodId = (millis() / 60000UL) / (SYNC_INTERVAL_MS / 60000UL);
+    for (int i = 0; i < _zoneCount; i++) _lastSyncPeriod[i] = periodId;
+
+    time_t now_t = time(nullptr);
+    struct tm* t = gmtime(&now_t);
+    snprintf(_lastSync, sizeof(_lastSync), "%04d-%02d-%02d %02d:%02d",
+             t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min);
 }

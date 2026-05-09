@@ -27,6 +27,7 @@ private:
     void _serveDashboard(WiFiClient& client);
     void _serveStatus(WiFiClient& client);
     void _serveSettings(WiFiClient& client, const char* body, int bodyLen);
+    void _serveSync(WiFiClient& client, const char* body, int bodyLen);
     bool _checkAuth(const char* headers);
     void _parseBody(const char* body, int len, const char* key, char* out, int outLen);
     void _sendHeader(WiFiClient& client, int code, const char* contentType);
