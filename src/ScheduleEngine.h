@@ -14,6 +14,9 @@ public:
     int           zoneCount()             const { return _zoneCount; }
     const char*   zoneName(int i)         const;
     HeatingStatus zoneStatus(int i)       const;
+    int           zoneNoboId(int i)       const {
+        return (i >= 0 && i < _zoneCount) ? _states[i].noboZoneId : -1;
+    }
     const char*   statusString()          const;
     const char*   nextEventString()       const;
 

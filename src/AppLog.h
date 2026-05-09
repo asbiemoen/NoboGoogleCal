@@ -4,8 +4,8 @@
 #include <time.h>
 #include "Types.h"
 
-#define APP_LOG_SIZE  8
-#define APP_LOG_WIDTH 48
+#define APP_LOG_SIZE  12
+#define APP_LOG_WIDTH 60
 
 class AppLog {
 public:
