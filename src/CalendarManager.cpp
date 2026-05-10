@@ -67,9 +67,11 @@ void CalendarManager::tick() {
 
     // Update lastSync timestamp
     time_t now_t = time(nullptr);
-    struct tm* t = gmtime(&now_t);
+    struct tm utcTm = *gmtime(&now_t);
+    time_t localNow = now_t + (time_t)norwayOffsetSeconds(&utcTm);
+    struct tm lTm = *gmtime(&localNow);
     snprintf(_lastSync, sizeof(_lastSync), "%04d-%02d-%02d %02d:%02d:%02d",
-             t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
+             lTm.tm_year + 1900, lTm.tm_mon + 1, lTm.tm_mday, lTm.tm_hour, lTm.tm_min, lTm.tm_sec);
 }
 
 void CalendarManager::_syncZone(int zoneIndex) {
@@ -436,7 +438,9 @@ void CalendarManager::forceSyncAll() {
     for (int i = 0; i < _zoneCount; i++) _lastSyncPeriod[i] = periodId;
 
     time_t now_t = time(nullptr);
-    struct tm* t = gmtime(&now_t);
+    struct tm utcTm = *gmtime(&now_t);
+    time_t localNow = now_t + (time_t)norwayOffsetSeconds(&utcTm);
+    struct tm lTm = *gmtime(&localNow);
     snprintf(_lastSync, sizeof(_lastSync), "%04d-%02d-%02d %02d:%02d:%02d",
-             t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
+             lTm.tm_year + 1900, lTm.tm_mon + 1, lTm.tm_mday, lTm.tm_hour, lTm.tm_min, lTm.tm_sec);
 }
