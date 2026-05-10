@@ -6,6 +6,7 @@
 
 #include "arduino_secrets.h"
 #include "src/Types.h"
+#include "src/NVMConfig.h"
 #include "src/NoboController.h"
 #include "src/CalendarManager.h"
 #include "src/WeatherService.h"
@@ -44,6 +45,7 @@ static WeatherService  weather;
 static ScheduleEngine  engine(nobo, calendar, weather);
 static AppWebServer    webServer(engine, weather, nobo, calendar);
 static LEDDisplay      led(engine, weather);
+static NVMConfig       nvm;
 
 // ─── Nobo post-connect profile setup ─────────────────────────────────────────
 static bool _noboProfilesEnsured = false;
@@ -78,11 +80,21 @@ static bool _tryWifi(const char* ssid, const char* pass) {
 }
 
 static bool connectWifi() {
-    if (_tryWifi(SECRET_SSID, SECRET_PASS)) return true;
+    // NVM overrides compile-time credentials when set
+    const char* ssid1 = nvmOr(nvm.wifiSsid,  SECRET_SSID);
+    const char* pass1 = nvmOr(nvm.wifiPass,  SECRET_PASS);
+    if (_tryWifi(ssid1, pass1)) return true;
+
+    // Secondary: NVM first, then compile-time fallback
+    const char* ssid2 = nvm.wifiSsid2[0] ? nvm.wifiSsid2 : nullptr;
+    const char* pass2 = nvm.wifiPass2[0] ? nvm.wifiPass2 : nullptr;
 #ifdef SECRET_SSID2
-    Serial.println(F("Trying secondary WiFi"));
-    if (_tryWifi(SECRET_SSID2, SECRET_PASS2)) return true;
+    if (!ssid2) { ssid2 = SECRET_SSID2; pass2 = SECRET_PASS2; }
 #endif
+    if (ssid2) {
+        Serial.println(F("Trying secondary WiFi"));
+        if (_tryWifi(ssid2, pass2 ? pass2 : "")) return true;
+    }
     return false;
 }
 
@@ -90,6 +102,9 @@ static bool connectWifi() {
 void setup() {
     Serial.begin(115200);
     delay(1500);
+
+    // Load NVM early so WiFi credentials can be overridden before connecting
+    nvmLoad(nvm);
 
     while (!connectWifi()) {}
 
@@ -133,12 +148,12 @@ void setup() {
     }
 
     engine.begin(ZONES, ZONE_COUNT);
-    webServer.begin(WEB_PASSWORD);
+    webServer.begin(nvmOr(nvm.webPassword, WEB_PASSWORD), nvm);
     led.begin();
 
     calendar.begin(ZONES, ZONE_COUNT);
-    weather.begin(WEATHER_CITY, WEATHER_API_KEY);
-    nobo.begin(NOBO_HUB_IP, NOBO_HUB_SERIAL);
+    weather.begin(nvmOr(nvm.weatherCity, WEATHER_CITY), WEATHER_API_KEY);
+    nobo.begin(nvmOr(nvm.noboIp, NOBO_HUB_IP), nvmOr(nvm.noboSerial, NOBO_HUB_SERIAL));
 
     Serial.println(F("NoboGoogleCal ready."));
 }

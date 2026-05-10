@@ -94,39 +94,7 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 <body>
 )html";
 
-static const char HTML_FOOT[] PROGMEM = R"html(
-<div class="modal-overlay" id="mainModal">
-<div class="modal">
-<div id="loginView">
-<h2>Login</h2>
-<form onsubmit="doLogin(event)">
-<label>Password</label>
-<input type="password" id="loginInput" placeholder="Enter password" autocomplete="current-password">
-<span id="loginErr" style="display:none;color:#f87171;font-size:.75rem;margin-top:.4rem">Wrong password</span>
-<div class="actions">
-<button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
-<button type="submit" class="btn-save">Login</button>
-</div>
-</form>
-</div>
-<div id="settingsView" style="display:none">
-<h2>Settings <button type="button" class="btn-cancel" style="float:right;padding:.25rem .5rem" onclick="doLogout()">Lock</button></h2>
-<form id="settingsForm" method="POST" action="/api/settings">
-<input type="hidden" name="pw" id="pwHidden">
-<input type="hidden" name="auth" id="authInput">
-<label>New password (leave blank to keep current)</label>
-<input type="password" id="newPwInput" name="new_password" autocomplete="new-password">
-<label>Weather city</label>
-<input type="text" name="weather_city" placeholder="Oslo">
-<div class="actions">
-<button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
-<button type="button" class="btn-cancel" onclick="doSync()">&#x21bb; Sync now</button>
-<button type="button" class="btn-save" onclick="saveSettings()">Save</button>
-</div>
-</form>
-</div>
-</div>
-</div>
+static const char HTML_FOOT_SCRIPT[] PROGMEM = R"html(
 <script>
 var _pw=sessionStorage.getItem('nbc_pw')||'';
 function $(i){return document.getElementById(i);}
@@ -146,11 +114,13 @@ function doSync(){if(!_pw)return;$('pwHidden').value=_pw;$('settingsForm').actio
 
 AppWebServer::AppWebServer(ScheduleEngine& e, WeatherService& w,
                            NoboController& n, CalendarManager& c)
-    : _server(80), _engine(e), _weather(w), _nobo(n), _cal(c), _started(false) {
+    : _server(80), _engine(e), _weather(w), _nobo(n), _cal(c),
+      _nvm(nullptr), _started(false), _rebootPending(false) {
     _password[0] = '\0';
 }
 
-void AppWebServer::begin(const char* pw) {
+void AppWebServer::begin(const char* pw, NVMConfig& nvm) {
+    _nvm = &nvm;
     strncpy(_password, pw, sizeof(_password) - 1);
     _server.begin();
     _started = true;
@@ -161,6 +131,11 @@ void AppWebServer::begin(const char* pw) {
 
 void AppWebServer::tick() {
     if (!_started) return;
+    if (_rebootPending) {
+        Serial.println(F("[Web] Rebooting to apply settings..."));
+        delay(500);
+        NVIC_SystemReset();
+    }
     WiFiClient client = _server.available();
     if (!client) return;
     _handleClient(client);
@@ -171,7 +146,7 @@ void AppWebServer::tick() {
 void AppWebServer::_handleClient(WiFiClient& client) {
     char   reqLine[128]  = {};
     char   headers[512]  = {};
-    char   body[256]     = {};
+    char   body[512]     = {};
     int    bodyLen       = 0;
     int    contentLength = 0;
     bool   isPost        = false;
@@ -406,7 +381,8 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
     client.print(F("</div>"));
 
     client.print(F("<footer>Heating Controller &mdash; Arduino Uno R4 WiFi</footer>"));
-    _sendProgmem(client, HTML_FOOT);
+    _serveSettingsModal(client);
+    _sendProgmem(client, HTML_FOOT_SCRIPT);
 }
 
 // ─── Zone event list ──────────────────────────────────────────────────────────
@@ -567,29 +543,156 @@ void AppWebServer::_serveStatus(WiFiClient& client) {
 void AppWebServer::_serveSettings(WiFiClient& client, const char* body, int len) {
     char auth[64] = {};
     _parseBody(body, len, "auth", auth, sizeof(auth));
-
     if (strncmp(auth, _password, sizeof(_password)) != 0) {
         _sendHeader(client, 401, "text/plain");
         client.print(F("Unauthorized"));
         return;
     }
 
+    bool reboot = false;
+
+    // Helper: parse field, update dst if non-empty and changed; set reboot if net field
+    auto upd = [&](char* dst, int dstLen, const char* key, bool net) {
+        char tmp[64] = {};
+        _parseBody(body, len, key, tmp, (int)sizeof(tmp));
+        if (!tmp[0]) return;
+        if (strcmp(dst, tmp) != 0) {
+            strncpy(dst, tmp, dstLen - 1);
+            dst[dstLen - 1] = '\0';
+            if (net) reboot = true;
+        }
+    };
+
+    // Account
     char newPw[32] = {};
     _parseBody(body, len, "new_password", newPw, sizeof(newPw));
-    if (strlen(newPw) > 0) {
+    if (newPw[0]) {
         strncpy(_password, newPw, sizeof(_password) - 1);
+        if (_nvm) strncpy(_nvm->webPassword, newPw, sizeof(_nvm->webPassword) - 1);
         Serial.println(F("[Web] Password updated"));
     }
 
-    char newCity[32] = {};
-    _parseBody(body, len, "weather_city", newCity, sizeof(newCity));
-    if (strlen(newCity) > 0) {
-        _weather.setCity(newCity);
-        Serial.print(F("[Web] Weather city -> "));
-        Serial.println(newCity);
+    if (_nvm) {
+        // Network — changes require reboot
+        upd(_nvm->wifiSsid,    sizeof(_nvm->wifiSsid),   "wifi_ssid",   true);
+        upd(_nvm->wifiPass,    sizeof(_nvm->wifiPass),   "wifi_pass",   true);
+        upd(_nvm->wifiSsid2,   sizeof(_nvm->wifiSsid2),  "wifi2_ssid",  true);
+        upd(_nvm->wifiPass2,   sizeof(_nvm->wifiPass2),  "wifi2_pass",  true);
+        upd(_nvm->noboIp,      sizeof(_nvm->noboIp),     "nobo_ip",     true);
+        upd(_nvm->noboSerial,  sizeof(_nvm->noboSerial), "nobo_serial", true);
+
+        // Weather city — instant apply
+        char newCity[32] = {};
+        _parseBody(body, len, "weather_city", newCity, sizeof(newCity));
+        if (newCity[0]) {
+            _weather.setCity(newCity);
+            strncpy(_nvm->weatherCity, newCity, sizeof(_nvm->weatherCity) - 1);
+            Serial.print(F("[Web] Weather city -> "));
+            Serial.println(newCity);
+        }
+
+        // Notifications
+        _nvm->emailEnabled = (strstr(body, "email_enabled=on") != nullptr);
+        upd(_nvm->emailTime, sizeof(_nvm->emailTime), "email_time", false);
+
+        char emailTo[64] = {};
+        _parseBody(body, len, "email_to", emailTo, sizeof(emailTo));
+        strncpy(_nvm->resendTo, emailTo, sizeof(_nvm->resendTo) - 1);
+
+        upd(_nvm->resendKey,  sizeof(_nvm->resendKey),  "resend_key",  false);
+
+        char resendFrom[64] = {};
+        _parseBody(body, len, "resend_from", resendFrom, sizeof(resendFrom));
+        strncpy(_nvm->resendFrom, resendFrom, sizeof(_nvm->resendFrom) - 1);
+
+        nvmSave(*_nvm);
     }
 
+    if (reboot) _rebootPending = true;
     client.print(F("HTTP/1.1 303 See Other\r\nLocation: /\r\nContent-Length: 0\r\n\r\n"));
+}
+
+// ─── Settings modal (dynamic — pre-fills current NVM values) ─────────────────
+
+void AppWebServer::_serveSettingsModal(WiFiClient& client) {
+    client.print(F("<div class=\"modal-overlay\" id=\"mainModal\"><div class=\"modal\">"));
+
+    // Login view
+    client.print(F("<div id=\"loginView\"><h2>Login</h2>"));
+    client.print(F("<form onsubmit=\"doLogin(event)\"><label>Password</label>"));
+    client.print(F("<input type=\"password\" id=\"loginInput\" placeholder=\"Enter password\" autocomplete=\"current-password\">"));
+    client.print(F("<span id=\"loginErr\" style=\"display:none;color:#f87171;font-size:.75rem;margin-top:.4rem\">Wrong password</span>"));
+    client.print(F("<div class=\"actions\">"));
+    client.print(F("<button type=\"button\" class=\"btn-cancel\" onclick=\"closeModal()\">Cancel</button>"));
+    client.print(F("<button type=\"submit\" class=\"btn-save\">Login</button>"));
+    client.print(F("</div></form></div>"));
+
+    // Settings view
+    client.print(F("<div id=\"settingsView\" style=\"display:none\">"));
+    client.print(F("<h2>Settings <button type=\"button\" class=\"btn-cancel\" style=\"float:right;padding:.25rem .5rem\" onclick=\"doLogout()\">Lock</button></h2>"));
+    client.print(F("<form id=\"settingsForm\" method=\"POST\" action=\"/api/settings\">"));
+    client.print(F("<input type=\"hidden\" name=\"pw\" id=\"pwHidden\">"));
+    client.print(F("<input type=\"hidden\" name=\"auth\" id=\"authInput\">"));
+
+    // Account
+    client.print(F("<p class=\"section-title\" style=\"margin-top:.5rem\">Account</p>"));
+    client.print(F("<label>New password (leave blank to keep current)</label>"));
+    client.print(F("<input type=\"password\" id=\"newPwInput\" name=\"new_password\" autocomplete=\"new-password\">"));
+
+    // Network
+    client.print(F("<p class=\"section-title\" style=\"margin-top:.75rem\">Network</p>"));
+    client.print(F("<label>WiFi SSID</label><input type=\"text\" name=\"wifi_ssid\" value=\""));
+    if (_nvm) client.print(_nvm->wifiSsid);
+    client.print(F("\" placeholder=\"(unchanged)\">"));
+    client.print(F("<label>WiFi password</label>"));
+    client.print(F("<input type=\"password\" name=\"wifi_pass\" autocomplete=\"new-password\" placeholder=\"(unchanged)\">"));
+    client.print(F("<label>Nob&oslash; hub IP</label><input type=\"text\" name=\"nobo_ip\" value=\""));
+    if (_nvm) client.print(_nvm->noboIp);
+    client.print(F("\" placeholder=\"192.168.x.x\">"));
+    client.print(F("<label>Nob&oslash; serial</label><input type=\"text\" name=\"nobo_serial\" value=\""));
+    if (_nvm) client.print(_nvm->noboSerial);
+    client.print(F("\" placeholder=\"123456789012\">"));
+    client.print(F("<label>Weather city</label><input type=\"text\" name=\"weather_city\" value=\""));
+    if (_nvm) client.print(_nvm->weatherCity);
+    client.print(F("\" placeholder=\"Oslo\">"));
+
+    bool hasSec = _nvm && _nvm->wifiSsid2[0];
+    if (!hasSec) {
+        client.print(F("<a href=\"#\" id=\"wifiSecLink\" style=\"font-size:.78rem;color:#a78bfa;display:block;margin-top:.5rem\""));
+        client.print(F(" onclick=\"$('wifiSec').style.display='block';this.style.display='none';return false\">+ Add secondary network</a>"));
+    }
+    client.print(hasSec ? F("<div id=\"wifiSec\">") : F("<div id=\"wifiSec\" style=\"display:none\">"));
+    client.print(F("<label>Secondary SSID</label><input type=\"text\" name=\"wifi2_ssid\" value=\""));
+    if (_nvm) client.print(_nvm->wifiSsid2);
+    client.print(F("\"><label>Secondary password</label>"));
+    client.print(F("<input type=\"password\" name=\"wifi2_pass\" autocomplete=\"new-password\" placeholder=\"(unchanged)\"></div>"));
+    client.print(F("<p style=\"font-size:.72rem;color:#94a3b8;margin-top:.5rem\">&#8505; WiFi and Nob&oslash; changes take effect after reboot.</p>"));
+
+    // Notifications
+    client.print(F("<p class=\"section-title\" style=\"margin-top:.75rem\">Notifications</p>"));
+    bool emailOn = _nvm && _nvm->emailEnabled;
+    client.print(F("<label><input type=\"checkbox\" name=\"email_enabled\" id=\"emailToggle\""));
+    if (emailOn) client.print(F(" checked"));
+    client.print(F(" onchange=\"$('emailSub').style.display=this.checked?'block':'none'\"> Daily summary email</label>"));
+    client.print(emailOn ? F("<div id=\"emailSub\">") : F("<div id=\"emailSub\" style=\"display:none\">"));
+    client.print(F("<label>Send at</label><input type=\"time\" name=\"email_time\" value=\""));
+    client.print((_nvm && _nvm->emailTime[0]) ? _nvm->emailTime : "07:00");
+    client.print(F("\"><label>Recipient</label><input type=\"email\" name=\"email_to\" value=\""));
+    if (_nvm) client.print(_nvm->resendTo);
+    client.print(F("\" placeholder=\"you@example.com\"></div>"));
+    client.print(F("<label>Resend API key</label>"));
+    client.print(F("<input type=\"password\" name=\"resend_key\" autocomplete=\"off\" placeholder=\""));
+    client.print((_nvm && _nvm->resendKey[0]) ? F("(set — leave blank to keep)") : F("re_..."));
+    client.print(F("\"><label>Resend from address</label>"));
+    client.print(F("<input type=\"email\" name=\"resend_from\" value=\""));
+    if (_nvm) client.print(_nvm->resendFrom);
+    client.print(F("\" placeholder=\"noreply@example.com\">"));
+
+    client.print(F("<div class=\"actions\">"));
+    client.print(F("<button type=\"button\" class=\"btn-cancel\" onclick=\"closeModal()\">Cancel</button>"));
+    client.print(F("<button type=\"button\" class=\"btn-cancel\" onclick=\"doSync()\">&#x21bb; Sync now</button>"));
+    client.print(F("<button type=\"button\" class=\"btn-save\" onclick=\"saveSettings()\">Save</button>"));
+    client.print(F("</div></form></div></div></div>"));
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
