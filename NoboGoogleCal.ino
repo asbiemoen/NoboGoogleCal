@@ -187,6 +187,19 @@ void setup() {
     serialTs(); Serial.println(F("NoboGoogleCal ready."));
 }
 
+// ─── Cooperative multitasking ─────────────────────────────────────────────────
+// Arduino's delay() calls yield() on every iteration. By overriding yield() we
+// let the web server handle requests while CalendarManager is blocked waiting
+// for ICS data over SSL — without threads or modem concurrency issues.
+// Throttled to 50 ms so we don't spam the modem with AT commands.
+void yield() {
+    static uint32_t _lastYieldMs = 0;
+    uint32_t now = millis();
+    if (now - _lastYieldMs < 50) return;
+    _lastYieldMs = now;
+    webServer.tick();
+}
+
 void loop() {
     mdns.run();
     webServer.tick();
