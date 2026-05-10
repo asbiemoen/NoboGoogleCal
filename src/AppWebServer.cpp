@@ -149,7 +149,7 @@ void AppWebServer::tick() {
 
 void AppWebServer::_handleClient(WiFiClient& client) {
     char     reqLine[128] = {};
-    char     headers[512] = {};
+    char     cookie[48]   = {};   // extracted Cookie header value only
     char     body[512]    = {};
     int      bodyLen      = 0;
     int      contentLength = 0;
@@ -167,9 +167,8 @@ void AppWebServer::_handleClient(WiFiClient& client) {
     reqLine[pos] = '\0';
     isPost = (strncmp(reqLine, "POST", 4) == 0);
 
-    // Read headers
-    pos = 0;
-    char headerLine[128];
+    // Read headers — extract only what we need
+    char headerLine[160];
     int hPos = 0;
     while (client.connected() && millis() < dl) {
         if (!client.available()) continue;
@@ -179,10 +178,8 @@ void AppWebServer::_handleClient(WiFiClient& client) {
             if (hPos <= 1) break;
             if (strncmp(headerLine, "Content-Length:", 15) == 0)
                 contentLength = atoi(headerLine + 16);
-            if (pos + hPos < (int)sizeof(headers) - 1) {
-                strncpy(headers + pos, headerLine, sizeof(headers) - pos - 1);
-                pos += hPos;
-            }
+            if (strncmp(headerLine, "Cookie:", 7) == 0)
+                strncpy(cookie, headerLine + 8, sizeof(cookie) - 1);
             hPos = 0;
         } else if (hPos < (int)sizeof(headerLine) - 1) {
             headerLine[hPos++] = c;
@@ -200,7 +197,7 @@ void AppWebServer::_handleClient(WiFiClient& client) {
     }
 
     // Authenticate once per request
-    _reqAuth = _checkAuth(headers);
+    _reqAuth = _checkAuth(cookie);
 
     // Route
     bool isDashboard = !isPost &&
@@ -794,11 +791,9 @@ void AppWebServer::_serveOverride(WiFiClient& client, const char* body, int len)
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-bool AppWebServer::_checkAuth(const char* hdrs) {
+bool AppWebServer::_checkAuth(const char* cookie) {
     if (!_sessionToken[0]) return false;
-    const char* p = strstr(hdrs, "Cookie:");
-    if (!p) return false;
-    const char* sv = strstr(p + 7, "s=");
+    const char* sv = strstr(cookie, "s=");
     if (!sv) return false;
     return (strncmp(sv + 2, _sessionToken, 16) == 0);
 }
