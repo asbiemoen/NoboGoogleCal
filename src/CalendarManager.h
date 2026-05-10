@@ -9,11 +9,6 @@ public:
     void tick();
     void forceSyncAll();
 
-    // Called during idle waits inside the ICS fetch (safe: no WiFi AT commands needed)
-    void setIdleTick(void (*cb)()) { _idleTick = cb; }
-    // Called with true at start of sync, false at end
-    void setOnSync(void (*cb)(bool)) { _onSync = cb; }
-
     // Returns all valid events; caller should read until valid==false
     const CalEvent* events()      const { return _events; }
     int             eventCount()  const { return _eventCount; }
@@ -23,9 +18,6 @@ public:
     }
 
 private:
-    void (*_idleTick)();
-    void (*_onSync)(bool);
-
     const ZoneConfig* _zones;
     int               _zoneCount;
     CalEvent          _events[MAX_EVENTS_PER_ZONE * MAX_ZONES];

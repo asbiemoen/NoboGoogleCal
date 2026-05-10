@@ -69,7 +69,7 @@ const uint8_t LEDDisplay::_font5x7[][5] = {
 };
 
 LEDDisplay::LEDDisplay()
-    : _scrollPos(0), _scrollTotal(12), _scrollStepMs(0), _syncing(false) {
+    : _scrollPos(0), _scrollTotal(12), _scrollStepMs(0) {
     memset(_hostname,  0, sizeof(_hostname));
     memset(_scrollMsg, 0, sizeof(_scrollMsg));
     memset(_scrollBuf, 0, sizeof(_scrollBuf));
@@ -81,20 +81,11 @@ void LEDDisplay::begin(const char* hostname) {
     serialTs(); Serial.println(F("[LED] Matrix initialised"));
 }
 
-void LEDDisplay::setSyncing(bool s) {
-    _syncing = s;
-    _scrollMsg[0] = '\0';  // force re-render on next tick (either "SYNC  " or hostname+IP)
-}
-
 void LEDDisplay::tick() {
     uint32_t now = millis();
 
     char msg[64] = {};
-    if (_syncing) {
-        strncpy(msg, "SYNC  ", sizeof(msg) - 1);
-    } else {
-        _buildMsg(msg, sizeof(msg));
-    }
+    _buildMsg(msg, sizeof(msg));
 
     if (strncmp(msg, _scrollMsg, sizeof(_scrollMsg)) != 0) {
         strncpy(_scrollMsg, msg, sizeof(_scrollMsg) - 1);
