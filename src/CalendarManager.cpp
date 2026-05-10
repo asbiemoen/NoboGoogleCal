@@ -150,10 +150,18 @@ bool CalendarManager::_fetchIcs(const char* url, int zoneIndex) {
     bool timeout = false;
     uint32_t deadline = millis() + 600000UL;  // 10 min — ICS can be large
 
+    uint32_t lastDataMs = millis();
     while (http.connected() || http.available()) {
         if (millis() > deadline) { timeout = true; break; }
-        if (!http.available()) { delay(1); continue; }
-
+        if (!http.available()) {
+            // If no new data for 15 s the connection has stalled or finished
+            // without a clean close — treat as end of stream and continue with
+            // whatever events we've parsed so far.
+            if (millis() - lastDataMs > 15000UL) break;
+            delay(1);
+            continue;
+        }
+        lastDataMs = millis();
         char c = (char)http.read();
         if (c == '\n') {
             if (pos > 0 && line[pos - 1] == '\r') pos--;
