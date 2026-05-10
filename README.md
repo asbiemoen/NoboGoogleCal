@@ -17,6 +17,30 @@ Arduino Uno R4 WiFi
   └── LEDDisplay      →  Built-in LED matrix
 ```
 
+## Scheduled operations
+
+All operations run from the main `loop()` — there is no RTOS or interrupt scheduling. Each component tracks its own last-run timestamp and fires when its interval has elapsed.
+
+| Operation | Interval | Notes |
+|---|---|---|
+| Calendar sync | 60 min | Staggered: one zone per minute to avoid back-to-back blocking fetches |
+| Schedule evaluation | 60 sec | Reads current events and sends comfort/eco overrides to Nobø |
+| Weather update | 3 hours | Fetches temperature from OpenWeatherMap; uses seasonal fallback on failure |
+| Nobø keepalive | 30 sec | Sends a `Y02` ping to keep the TCP connection alive |
+| Nobø reconnect | 30 sec | Retries connection automatically when disconnected |
+| NTP sync | On update | `NTPClient` updates passively; clock is re-anchored when a valid epoch arrives |
+| EEPROM save | Once per day | Persists the current event list to flash after the first successful sync of the day |
+
+### Calendar sync in detail
+
+Each zone's ICS feed is fetched independently on a staggered schedule (zone 0 at minute 0, zone 1 at minute 1, etc.) so the loop is never blocked by two simultaneous downloads. A single fetch can take up to 15 seconds for a 13 KB feed; a 15-second stall detector breaks out early if the server stops sending data before TCP closes cleanly.
+
+On boot the last saved event list is loaded from EEPROM so the schedule is available immediately, before the first live sync completes.
+
+### Nobø connection
+
+The Arduino connects to the Nobø Energy Hub over TCP port 27779 using the Nobø Hub Protocol v1.1. If the connection drops, it retries every 30 seconds. Calendar events continue to be fetched and evaluated while the hub is offline; overrides are applied as soon as the connection is re-established.
+
 ## Features
 
 - **N zones** — one Google Calendar per heating zone (configurable)
