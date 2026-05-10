@@ -56,14 +56,26 @@ void MiniMDNS::_announce() {
     resp[pos++] = myIp[0]; resp[pos++] = myIp[1];
     resp[pos++] = myIp[2]; resp[pos++] = myIp[3];
 
-    // Open, send, close — no persistent socket
+    // Open, send, close — no persistent socket.
+    // begin() is required to get a valid _sock; a regular UDP socket can
+    // send to a multicast destination without joining the group.
     WiFiUDP udp;
-    udp.beginPacket(MDNS_ADDR, MDNS_PORT);
+    int bOk = udp.begin(MDNS_PORT);
+    int pOk = udp.beginPacket(MDNS_ADDR, MDNS_PORT);
     udp.write(resp, pos);
     int ok = udp.endPacket();
+    udp.stop();
     serialTs(); Serial.print(F("[mDNS] Announced "));
     Serial.print(_hostname);
     Serial.print(F(".local -> "));
     Serial.print(myIp);
-    Serial.println(ok ? F(" OK") : F(" FAIL"));
+    Serial.print(ok ? F(" OK") : F(" FAIL"));
+    if (!ok) {
+        Serial.print(F(" (begin="));
+        Serial.print(bOk);
+        Serial.print(F(" pkt="));
+        Serial.print(pOk);
+        Serial.print(F(")"));
+    }
+    Serial.println();
 }
