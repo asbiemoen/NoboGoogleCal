@@ -77,11 +77,6 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .hero-countdown{display:inline-block;margin-top:.5rem;font-size:.78rem;font-weight:600;color:#fb923c;background:#451a03;border-radius:.4rem;padding:.25rem .6rem}
 .zone-warn{font-size:.73rem;color:#f87171;padding:.2rem 1.25rem;background:#450a0a}
 .section-title{font-size:.72rem;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:.08em;padding:0 1.5rem .4rem}
-.hero-override{padding:.1rem 1.25rem .6rem;display:flex;gap:.5rem;flex-wrap:wrap}
-.btn-ov{border:none;padding:.3rem .9rem;border-radius:9999px;font-size:.78rem;font-weight:600;cursor:pointer}
-.btn-ov-boost{background:#15803d;color:#fff}
-.btn-ov-mute{background:#dc2626;color:#fff}
-.btn-ov-cancel{background:#f59e0b;color:#000}
 .card{background:#1a1f2e;border:1px solid #4c1d95;border-radius:.75rem;padding:1.5rem}
 .card h2{font-size:1rem;font-weight:600;color:#a78bfa;margin-bottom:.75rem}
 .card label{display:block;font-size:.8rem;color:#94a3b8;margin-bottom:.25rem;margin-top:.75rem}
@@ -89,7 +84,13 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .card .actions{display:flex;gap:.75rem;margin-top:1.25rem;justify-content:flex-end;flex-wrap:wrap}
 .card .actions form{margin:0}
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}
-.settings-wrap{max-width:480px;margin:2rem auto;padding:0 1rem 2rem}
+.settings-wrap{max-width:900px;margin:2rem auto;padding:0 1rem 2rem}
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.settings-actions{display:flex;gap:.75rem;justify-content:flex-end;flex-wrap:wrap}
+.city-row{display:flex;gap:.5rem}
+.city-row input:first-child{flex:3}
+.city-row input:last-child{flex:1}
+@media(max-width:640px){.settings-grid{grid-template-columns:1fr}}
 .page-nav{background:#1a1f2e;border-bottom:1px solid #2d3748;padding:.75rem 1.5rem;display:flex;align-items:center;gap:1rem}
 .page-nav a{color:#a78bfa;font-size:.85rem;text-decoration:none}
 .page-nav .pn-title{font-size:1rem;font-weight:600;color:#e2e8f0;flex:1}
@@ -107,7 +108,6 @@ static const char HTML_FOOT[] PROGMEM = R"html(</body></html>
 
 static const char HTML_FOOT_SCRIPT[] PROGMEM = R"html(
 <script>
-function doOverride(z,a){var h;if(a<0){h=window.prompt('Hours (e.g. 2 or 0.5):','2');if(h===null)return;h=parseFloat(h)||2;}else{h=a;}fetch('/api/override',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'zone='+z+'&hours='+h}).then(function(r){if(r.ok)location.reload();});}
 setTimeout(function(){location.reload();},60000);
 </script>
 </body></html>
@@ -219,8 +219,6 @@ void AppWebServer::_handleClient(WiFiClient& client) {
         _serveLogin(client, body, bodyLen);
     } else if (isPost && strstr(reqLine, "POST /logout")) {
         _serveLogout(client);
-    } else if (isPost && strstr(reqLine, "POST /api/override")) {
-        _serveOverride(client, body, bodyLen);
     } else {
         _sendHeader(client, 404, "text/plain");
         client.print(F("Not found"));
@@ -310,29 +308,6 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
         client.print(F("\">"));
         client.print(statusStr);
         client.print(F("</span></div>"));
-        if (_reqAuth) {
-            client.print(F("<div class=\"hero-override\">"));
-            bool ovActive  = _engine.overrideActive(i);
-            bool isComfort = (_engine.zoneStatus(i) == STATUS_COMFORT);
-            if (ovActive) {
-                char btnBuf[72];
-                snprintf(btnBuf, sizeof(btnBuf),
-                    "<button class=\"btn-ov btn-ov-cancel\" onclick=\"doOverride(%d,0)\">Cancel override</button>", i);
-                client.print(btnBuf);
-            }
-            {
-                char btnBuf[80];
-                if (isComfort) {
-                    snprintf(btnBuf, sizeof(btnBuf),
-                        "<button class=\"btn-ov btn-ov-mute\" onclick=\"doOverride(%d,-1)\">Mute</button>", i);
-                } else {
-                    snprintf(btnBuf, sizeof(btnBuf),
-                        "<button class=\"btn-ov btn-ov-boost\" onclick=\"doOverride(%d,-1)\">Boost</button>", i);
-                }
-                client.print(btnBuf);
-            }
-            client.print(F("</div>"));
-        }
     }
     if (soonestChange > 0) {
         int minsLeft = (int)((soonestChange - now) / 60);
@@ -363,7 +338,12 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
         client.print(F("<div class=\"temp-na\">-- &deg;C</div>"));
     }
     client.print(F("<div class=\"info\">"));
-    client.print(_weather.city());
+    {
+        const char* cityFull = _weather.city();
+        const char* comma    = strchr(cityFull, ',');
+        if (comma) client.write(cityFull, comma - cityFull);
+        else       client.print(cityFull);
+    }
     client.print(F("<br>Daily avg outdoor temperature"));
     if (!weatherOk) {
         client.print(F("<br><span style=\"color:#f87171\">Data unavailable &mdash; seasonal fallback</span>"));
@@ -462,15 +442,11 @@ void AppWebServer::_serveSettingsPage(WiFiClient& client) {
     client.print(F("</form></nav>"));
 
     client.print(F("<div class=\"settings-wrap\">"));
-    client.print(F("<form method=\"POST\" action=\"/api/settings\"><div class=\"card\">"));
+    client.print(F("<form method=\"POST\" action=\"/api/settings\">"));
+    client.print(F("<div class=\"settings-grid\">"));
 
-    // Account
-    client.print(F("<h2>Account</h2>"));
-    client.print(F("<label>New password (leave blank to keep current)</label>"));
-    client.print(F("<input type=\"password\" name=\"new_password\" autocomplete=\"new-password\" placeholder=\"(unchanged)\">"));
-
-    // Network
-    client.print(F("<h2 style=\"margin-top:1.25rem\">Network</h2>"));
+    // ── Network card (left) ──────────────────────────────────────────────────
+    client.print(F("<div class=\"card\"><h2>Network</h2>"));
     client.print(F("<label>WiFi SSID</label><input type=\"text\" name=\"wifi_ssid\" value=\""));
     if (_nvm) client.print(_nvm->wifiSsid);
     client.print(F("\" placeholder=\"(unchanged)\">"));
@@ -487,35 +463,64 @@ void AppWebServer::_serveSettingsPage(WiFiClient& client) {
     client.print(F("<label>Nob&oslash; serial</label><input type=\"text\" name=\"nobo_serial\" value=\""));
     if (_nvm) client.print(_nvm->noboSerial);
     client.print(F("\" placeholder=\"123456789012\">"));
-    client.print(F("<label>Weather city</label><input type=\"text\" name=\"weather_city\" value=\""));
-    if (_nvm) client.print(_nvm->weatherCity);
-    client.print(F("\" placeholder=\"Oslo\">"));
+    // Split weather city on comma → city + country
+    {
+        char cityBuf[32]    = {};
+        char countryBuf[8]  = {};
+        if (_nvm && _nvm->weatherCity[0]) {
+            const char* comma = strchr(_nvm->weatherCity, ',');
+            if (comma) {
+                int cityLen = (int)(comma - _nvm->weatherCity);
+                if (cityLen > (int)sizeof(cityBuf) - 1) cityLen = sizeof(cityBuf) - 1;
+                strncpy(cityBuf, _nvm->weatherCity, cityLen);
+                strncpy(countryBuf, comma + 1, sizeof(countryBuf) - 1);
+            } else {
+                strncpy(cityBuf, _nvm->weatherCity, sizeof(cityBuf) - 1);
+            }
+        }
+        client.print(F("<label>Weather city</label><div class=\"city-row\">"));
+        client.print(F("<input type=\"text\" name=\"weather_city\" value=\""));
+        client.print(cityBuf);
+        client.print(F("\" placeholder=\"Oslo\">"));
+        client.print(F("<input type=\"text\" name=\"weather_country\" value=\""));
+        client.print(countryBuf);
+        client.print(F("\" placeholder=\"NO\" maxlength=\"4\">"));
+        client.print(F("</div>"));
+    }
     client.print(F("<p style=\"font-size:.72rem;color:#94a3b8;margin-top:.5rem\">&#8505; WiFi and Nob&oslash; changes take effect after reboot.</p>"));
+    client.print(F("</div>"));
 
-    // Notifications
-    client.print(F("<h2 style=\"margin-top:1.25rem\">Notifications</h2>"));
+    // ── Notifications card (right) ───────────────────────────────────────────
+    client.print(F("<div class=\"card\"><h2>Notifications</h2>"));
     bool emailOn = _nvm && _nvm->emailEnabled;
     client.print(F("<label><input type=\"checkbox\" name=\"email_enabled\""));
     if (emailOn) client.print(F(" checked"));
     client.print(F("> Daily summary email</label>"));
     client.print(F("<label>Send at</label><input type=\"time\" name=\"email_time\" value=\""));
     client.print((_nvm && _nvm->emailTime[0]) ? _nvm->emailTime : "07:00");
-    client.print(F("\"><label>Recipient</label><input type=\"email\" name=\"email_to\" value=\""));
+    client.print(F("\">"));
+    client.print(F("<label>Recipient</label><input type=\"email\" name=\"email_to\" value=\""));
     if (_nvm) client.print(_nvm->resendTo);
     client.print(F("\" placeholder=\"you@example.com\">"));
     client.print(F("<label>Resend API key</label>"));
     client.print(F("<input type=\"password\" name=\"resend_key\" autocomplete=\"off\" placeholder=\""));
     client.print((_nvm && _nvm->resendKey[0]) ? F("(set &mdash; leave blank to keep)") : F("re_..."));
-    client.print(F("\"><label>Resend from address</label>"));
+    client.print(F("\">"));
+    client.print(F("<label>Resend from address</label>"));
     client.print(F("<input type=\"email\" name=\"resend_from\" value=\""));
     if (_nvm) client.print(_nvm->resendFrom);
     client.print(F("\" placeholder=\"noreply@example.com\">"));
+    client.print(F("</div>"));
 
-    // Actions
-    client.print(F("<div class=\"actions\">"));
+    client.print(F("</div>")); // settings-grid
+
+    // ── Actions ──────────────────────────────────────────────────────────────
+    client.print(F("<div class=\"settings-actions\">"));
     client.print(F("<button type=\"submit\" formaction=\"/sync\" class=\"btn-cancel\">&#x21bb; Sync now</button>"));
     client.print(F("<button type=\"submit\" class=\"btn-save\">Save</button>"));
-    client.print(F("</div></div></form></div>"));
+    client.print(F("</div>"));
+
+    client.print(F("</form></div>")); // settings-wrap
     _sendProgmem(client, HTML_FOOT);
 }
 
@@ -688,15 +693,6 @@ void AppWebServer::_serveSettings(WiFiClient& client, const char* body, int len)
         }
     };
 
-    // Account
-    char newPw[32] = {};
-    _parseBody(body, len, "new_password", newPw, sizeof(newPw));
-    if (newPw[0]) {
-        strncpy(_password, newPw, sizeof(_password) - 1);
-        if (_nvm) strncpy(_nvm->webPassword, newPw, sizeof(_nvm->webPassword) - 1);
-        Serial.println(F("[Web] Password updated"));
-    }
-
     if (_nvm) {
         upd(_nvm->wifiSsid,   sizeof(_nvm->wifiSsid),   "wifi_ssid",   true);
         upd(_nvm->wifiPass,   sizeof(_nvm->wifiPass),   "wifi_pass",   true);
@@ -705,13 +701,20 @@ void AppWebServer::_serveSettings(WiFiClient& client, const char* body, int len)
         upd(_nvm->noboIp,     sizeof(_nvm->noboIp),     "nobo_ip",     true);
         upd(_nvm->noboSerial, sizeof(_nvm->noboSerial), "nobo_serial", true);
 
-        char newCity[32] = {};
-        _parseBody(body, len, "weather_city", newCity, sizeof(newCity));
+        char newCity[32]    = {};
+        char newCountry[8]  = {};
+        _parseBody(body, len, "weather_city",    newCity,    sizeof(newCity));
+        _parseBody(body, len, "weather_country", newCountry, sizeof(newCountry));
         if (newCity[0]) {
-            _weather.setCity(newCity);
-            strncpy(_nvm->weatherCity, newCity, sizeof(_nvm->weatherCity) - 1);
+            char combined[40] = {};
+            if (newCountry[0])
+                snprintf(combined, sizeof(combined), "%s,%s", newCity, newCountry);
+            else
+                strncpy(combined, newCity, sizeof(combined) - 1);
+            _weather.setCity(combined);
+            strncpy(_nvm->weatherCity, combined, sizeof(_nvm->weatherCity) - 1);
             Serial.print(F("[Web] Weather city -> "));
-            Serial.println(newCity);
+            Serial.println(combined);
         }
 
         _nvm->emailEnabled = (strstr(body, "email_enabled=on") != nullptr);
