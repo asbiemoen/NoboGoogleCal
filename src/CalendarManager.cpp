@@ -48,9 +48,6 @@ void CalendarManager::begin(const ZoneConfig* zones, int zoneCount) {
 void CalendarManager::tick() {
     uint32_t now = millis();
 
-    // Let system fully boot before first sync — EEPROM events cover this window
-    if (now < 120000UL) return;
-
     // Each zone is synced one minute apart within the hour window
     // Zone 0 at :00, zone 1 at :01, etc.
     // We use (now / 60000) % SYNC_INTERVAL_MS to stagger fetches.
