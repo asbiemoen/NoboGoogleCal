@@ -1,6 +1,5 @@
 #include <time.h>      // must precede RTC.h — fully defines struct tm before wchar.h sees it
 #include <WiFiS3.h>
-#include <ArduinoMDNS.h>
 #include <RTC.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
@@ -15,6 +14,7 @@
 #include "src/AppWebServer.h"
 #include "src/LEDDisplay.h"
 #include "src/EmailService.h"
+#include "src/MiniMDNS.h"
 #include "config.h"  // must come after Types.h
 
 // ─── System clock ─────────────────────────────────────────────────────────────
@@ -36,11 +36,10 @@ extern "C" int _gettimeofday(struct timeval* tv, void*) {
     return 0;
 }
 
-// ─── NTP + mDNS ───────────────────────────────────────────────────────────────
-static WiFiUDP      ntpUdp;
-static NTPClient    ntp(ntpUdp, "pool.ntp.org", 0);  // UTC only; display code applies Norway offset
-static WiFiUDP      mdnsUdp;
-static MDNSResponder mdns(mdnsUdp);
+// ─── NTP ──────────────────────────────────────────────────────────────────────
+static WiFiUDP   ntpUdp;
+static NTPClient ntp(ntpUdp, "pool.ntp.org", 0);  // UTC only; display code applies Norway offset
+static MiniMDNS  mdns;
 
 // ─── Components ───────────────────────────────────────────────────────────────
 static NoboController  nobo;
@@ -154,7 +153,7 @@ void setup() {
 
     {
         const char* hostname = nvmOr(nvm.mdnsName, MDNS_NAME);
-        mdns.begin(WiFi.localIP(), hostname);
+        mdns.begin(hostname);
         Serial.print(F("mDNS: "));
         Serial.print(hostname);
         Serial.println(F(".local"));
