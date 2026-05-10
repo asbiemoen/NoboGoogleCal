@@ -755,7 +755,7 @@ void AppWebServer::_serveLogin(WiFiClient& client, const char* body, int len) {
     _parseBody(body, len, "pw", pw, sizeof(pw));
     if (strncmp(pw, _password, sizeof(_password)) == 0) {
         _generateToken();
-        client.print(F("HTTP/1.1 303 See Other\r\nLocation: /\r\n"));
+        client.print(F("HTTP/1.1 303 See Other\r\nLocation: /settings\r\n"));
         client.print(F("Set-Cookie: s="));
         client.print(_sessionToken);
         client.print(F("; Path=/; SameSite=Strict\r\nContent-Length: 0\r\n\r\n"));
