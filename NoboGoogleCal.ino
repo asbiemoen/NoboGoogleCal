@@ -48,7 +48,7 @@ static CalendarManager calendar;
 static WeatherService  weather;
 static ScheduleEngine  engine(nobo, calendar, weather);
 static AppWebServer    webServer(engine, weather, nobo, calendar);
-static LEDDisplay      led(engine, weather);
+static LEDDisplay      led;
 static NVMConfig       nvm;
 static EmailService    emailService;
 
@@ -162,7 +162,7 @@ void setup() {
 
     engine.begin(ZONES, ZONE_COUNT);
     webServer.begin(nvmOr(nvm.webPassword, WEB_PASSWORD), nvm);
-    led.begin();
+    led.begin(nvmOr(nvm.mdnsName, MDNS_NAME));
 
     calendar.begin(ZONES, ZONE_COUNT);
     weather.begin(nvmOr(nvm.weatherCity, WEATHER_CITY), WEATHER_API_KEY);
