@@ -499,7 +499,32 @@ void AppWebServer::_serveSettingsPage(WiFiClient& client) {
     bool emailOn = _nvm && _nvm->emailEnabled;
     client.print(F("<label><input type=\"checkbox\" name=\"email_enabled\""));
     if (emailOn) client.print(F(" checked"));
-    client.print(F("> Daily summary email</label>"));
+    client.print(F("> Enable email summary</label>"));
+
+    client.print(F("<label>Frequency</label>"));
+    client.print(F("<select name=\"email_freq\">"));
+    {
+        bool weekly = _nvm && strcmp(_nvm->emailFrequency, "weekly") == 0;
+        client.print(weekly ? F("<option value=\"daily\">Daily</option><option value=\"weekly\" selected>Weekly</option>")
+                            : F("<option value=\"daily\" selected>Daily</option><option value=\"weekly\">Weekly</option>"));
+    }
+    client.print(F("</select>"));
+
+    client.print(F("<label>Day (weekly only)</label>"));
+    client.print(F("<select name=\"email_weekday\">"));
+    {
+        static const char* days[7] = {"Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"};
+        uint8_t cur = _nvm ? _nvm->emailWeekday : 1;
+        for (int d = 0; d < 7; d++) {
+            client.print(F("<option value=\""));
+            client.print(d);
+            client.print(d == (int)cur ? F("\" selected>") : F("\">"));
+            client.print(days[d]);
+            client.print(F("</option>"));
+        }
+    }
+    client.print(F("</select>"));
+
     client.print(F("<label>Send at</label><input type=\"time\" name=\"email_time\" value=\""));
     client.print((_nvm && _nvm->emailTime[0]) ? _nvm->emailTime : "07:00");
     client.print(F("\">"));
@@ -723,7 +748,14 @@ void AppWebServer::_serveSettings(WiFiClient& client, const char* body, int len)
         }
 
         _nvm->emailEnabled = (strstr(body, "email_enabled=on") != nullptr);
-        upd(_nvm->emailTime, sizeof(_nvm->emailTime), "email_time", false);
+        upd(_nvm->emailTime,      sizeof(_nvm->emailTime),      "email_time", false);
+        upd(_nvm->emailFrequency, sizeof(_nvm->emailFrequency), "email_freq", false);
+
+        {
+            char wdBuf[4] = {};
+            _parseBody(body, len, "email_weekday", wdBuf, sizeof(wdBuf));
+            if (wdBuf[0]) _nvm->emailWeekday = (uint8_t)atoi(wdBuf);
+        }
 
         char emailTo[64] = {};
         _parseBody(body, len, "email_to", emailTo, sizeof(emailTo));

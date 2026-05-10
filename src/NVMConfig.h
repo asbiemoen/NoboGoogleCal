@@ -19,12 +19,14 @@ struct NVMConfig {
     char resendKey[64];
     char resendFrom[64];
     char resendTo[64];
-    bool emailEnabled;
-    char emailTime[6];   // "HH:MM\0"
-    char mdnsName[32];
+    bool    emailEnabled;
+    char    emailTime[6];       // "HH:MM\0"
+    char    emailFrequency[8];  // "daily" or "weekly"
+    uint8_t emailWeekday;       // 0=Sun,1=Mon,...,6=Sat — used when weekly
+    char    mdnsName[32];
 };
 
-static const uint16_t NVM_MAGIC = 0xAB14;
+static const uint16_t NVM_MAGIC = 0xAB15;
 
 inline void nvmLoad(NVMConfig& cfg) {
     EEPROM.get(0, cfg);
@@ -32,7 +34,9 @@ inline void nvmLoad(NVMConfig& cfg) {
         memset(&cfg, 0, sizeof(cfg));
         cfg.magic = NVM_MAGIC;
         cfg.emailEnabled = true;
-        strncpy(cfg.emailTime, "07:00", sizeof(cfg.emailTime) - 1);
+        strncpy(cfg.emailTime,      "07:00",  sizeof(cfg.emailTime)      - 1);
+        strncpy(cfg.emailFrequency, "daily",  sizeof(cfg.emailFrequency) - 1);
+        cfg.emailWeekday = 1; // Monday
     }
 }
 
