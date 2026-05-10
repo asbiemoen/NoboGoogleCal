@@ -50,6 +50,8 @@ header h1{font-size:1.1rem;font-weight:600;color:#a78bfa;letter-spacing:.05em}
 .h-eco{flex:1;background:#15803d}
 .h-comfort{flex:1;background:#dc2626}
 .h-active{flex:1;background:#ef4444;box-shadow:inset 0 0 3px rgba(255,255,255,.25)}
+.h-preheat{flex:1;background:#f59e0b}
+.h-preheat-active{flex:1;background:#fbbf24;box-shadow:inset 0 0 3px rgba(255,255,255,.25)}
 footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .settings-btn{background:#4c1d95;color:#c4b5fd;border:none;padding:.5rem 1rem;border-radius:.5rem;cursor:pointer;font-size:.82rem;font-weight:600}
 .settings-btn:hover{background:#5b21b6}
@@ -69,6 +71,7 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .events{margin-bottom:.75rem}
 .ev{display:flex;align-items:center;gap:.4rem;padding:.2rem 0;border-bottom:1px solid #1e293b}
 .ev:last-child{border-bottom:none}
+.ev-next{border-left:3px solid #f59e0b;padding-left:.35rem}
 .ev-t{color:#64748b;font-size:.72rem;white-space:nowrap;min-width:100px}
 .ev-s{color:#cbd5e1;font-size:.78rem;flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .logbox{background:#0d1117;border:1px solid #1e293b;border-radius:.5rem;padding:.5rem 1rem;margin:0 1.5rem 1.5rem;font-family:monospace;font-size:.73rem;line-height:1.7}
@@ -238,10 +241,10 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
     int localOff = norwayOffsetSeconds(&nowUtc);
     time_t localNow = now + (time_t)localOff;
     struct tm lNow = *gmtime(&localNow);
-    char boardTimeBuf[28];
-    snprintf(boardTimeBuf, sizeof(boardTimeBuf), "%02d.%02d.%04d %02d:%02d UTC+%d",
-             lNow.tm_mday, lNow.tm_mon+1, lNow.tm_year+1900,
-             lNow.tm_hour, lNow.tm_min, localOff/3600);
+    char boardTimeBuf[32];
+    snprintf(boardTimeBuf, sizeof(boardTimeBuf), "%04d-%02d-%02d %02d:%02d:%02d UTC+%d",
+             lNow.tm_year+1900, lNow.tm_mon+1, lNow.tm_mday,
+             lNow.tm_hour, lNow.tm_min, lNow.tm_sec, localOff/3600);
 
     // 3. Header
     client.print(F("<header><h1>TMS Heating</h1><div class=\"badges\">"));
@@ -379,15 +382,15 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
 // ─── Zone event list ──────────────────────────────────────────────────────────
 
 void AppWebServer::_printZoneEvents(WiFiClient& client, int zoneIndex, bool pending) {
-    static const char* dn[7] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
-    time_t now = time(nullptr);
-    int shown = 0;
-    time_t lastStart = 0;
+    time_t  now      = time(nullptr);
+    int     shown    = 0;
+    time_t  lastStart = 0;
+    uint8_t preheatH = _engine.zonePreheatHours(zoneIndex);
 
     client.print(F("<div class=\"events\">"));
 
     for (int pass = 0; pass < 3; pass++) {
-        time_t best = 0;
+        time_t best    = 0;
         int    bestIdx = -1;
         for (int e = 0; e < MAX_EVENTS_PER_ZONE * MAX_ZONES; e++) {
             const CalEvent& ev = _cal.events()[e];
@@ -401,29 +404,36 @@ void AppWebServer::_printZoneEvents(WiFiClient& client, int zoneIndex, bool pend
         const CalEvent& ev = _cal.events()[bestIdx];
         lastStart = ev.start;
 
-        struct tm utcTm = *gmtime(&ev.start);
-        time_t localStart = ev.start + norwayOffsetSeconds(&utcTm);
-        struct tm lTm = *gmtime(&localStart);
+        struct tm utcTm    = *gmtime(&ev.start);
+        time_t localStart  = ev.start + norwayOffsetSeconds(&utcTm);
+        struct tm lTm      = *gmtime(&localStart);
 
         struct tm utcEndTm = *gmtime(&ev.end);
-        time_t localEnd = ev.end + norwayOffsetSeconds(&utcEndTm);
-        struct tm lEndTm = *gmtime(&localEnd);
+        time_t localEnd    = ev.end + norwayOffsetSeconds(&utcEndTm);
+        struct tm lEndTm   = *gmtime(&localEnd);
 
-        char timeBuf[12];
-        snprintf(timeBuf, sizeof(timeBuf), "%s %02d:%02d",
-                 dn[lTm.tm_wday], lTm.tm_hour, lTm.tm_min);
+        char timeBuf[18];
+        snprintf(timeBuf, sizeof(timeBuf), "%04d-%02d-%02d %02d:%02d",
+                 lTm.tm_year + 1900, lTm.tm_mon + 1, lTm.tm_mday,
+                 lTm.tm_hour, lTm.tm_min);
         char endBuf[6];
         snprintf(endBuf, sizeof(endBuf), "%02d:%02d", lEndTm.tm_hour, lEndTm.tm_min);
 
-        // Show the zone's configured label when Google returns "Busy"
         const char* label = (strcmp(ev.summary, "Busy") == 0)
                             ? _engine.zoneEventLabel(zoneIndex)
                             : ev.summary;
 
-        client.print(F("<div class=\"ev\"><span class=\"ev-t\">"));
+        bool isFirst = (shown == 0);
+        client.print(isFirst ? F("<div class=\"ev ev-next\">") : F("<div class=\"ev\">"));
+        client.print(F("<span class=\"ev-t\">"));
         client.print(timeBuf);
         client.print(F("&ndash;"));
         client.print(endBuf);
+        if (preheatH > 0) {
+            client.print(F("&nbsp;<span class=\"badge badge-warn\" style=\"font-size:.62rem;padding:.1rem .3rem\">(+"));
+            client.print(preheatH);
+            client.print(F("h warmup)</span>"));
+        }
         client.print(F("</span><span class=\"ev-s\">"));
         client.print(label);
         client.print(F("</span>"));
@@ -450,6 +460,8 @@ void AppWebServer::_printZoneTimeline(WiFiClient& client, int zoneIndex) {
     time_t localNow = now + (time_t)localOff;
     time_t today = (localNow - (localNow % 86400UL)) - (time_t)localOff;
 
+    uint8_t preheatH = _engine.zonePreheatHours(zoneIndex);
+
     client.print(F("<div class=\"timeline\">"));
     for (int d = 0; d < 7; d++) {
         time_t dayStart      = today + (time_t)d * 86400L;
@@ -465,20 +477,28 @@ void AppWebServer::_printZoneTimeline(WiFiClient& client, int zoneIndex) {
         client.print(F("</div><div class=\"day-hours\">"));
 
         for (int h = 0; h < 24; h++) {
-            time_t hStart = dayStart + (time_t)h * 3600L;
-            time_t hEnd   = hStart + 3600L;
+            time_t hStart  = dayStart + (time_t)h * 3600L;
+            time_t hEnd    = hStart + 3600L;
+            bool   isNow   = (now >= hStart && now < hEnd);
+            bool   inEvent   = false;
+            bool   inPreheat = false;
 
-            bool comfort  = false;
-            bool isNow    = (now >= hStart && now < hEnd);
             for (int e = 0; e < MAX_EVENTS_PER_ZONE * MAX_ZONES; e++) {
                 const CalEvent& ev = _cal.events()[e];
                 if (!ev.valid || ev.zoneIndex != (uint8_t)zoneIndex) continue;
-                if (ev.start < hEnd && ev.end > hStart) { comfort = true; break; }
+                if (ev.start < hEnd && ev.end > hStart) {
+                    inEvent = true;
+                } else if (preheatH > 0) {
+                    time_t phFrom = ev.start - (time_t)preheatH * 3600L;
+                    if (phFrom < hEnd && ev.start > hStart) inPreheat = true;
+                }
             }
 
-            if (comfort && isNow)  client.print(F("<div class=\"h-active\"></div>"));
-            else if (comfort)      client.print(F("<div class=\"h-comfort\"></div>"));
-            else                   client.print(F("<div class=\"h-eco\"></div>"));
+            if      (inEvent   && isNow) client.print(F("<div class=\"h-active\"></div>"));
+            else if (inEvent)             client.print(F("<div class=\"h-comfort\"></div>"));
+            else if (inPreheat && isNow) client.print(F("<div class=\"h-preheat-active\"></div>"));
+            else if (inPreheat)           client.print(F("<div class=\"h-preheat\"></div>"));
+            else                          client.print(F("<div class=\"h-eco\"></div>"));
         }
 
         client.print(F("</div></div>"));

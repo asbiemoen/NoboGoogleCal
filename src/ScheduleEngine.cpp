@@ -49,6 +49,11 @@ const char* ScheduleEngine::zoneEventLabel(int i) const {
     return _zones[i].eventLabel;
 }
 
+uint8_t ScheduleEngine::zonePreheatHours(int i) const {
+    if (i < 0 || i >= _zoneCount) return 0;
+    return _zones[i].preheatHours;
+}
+
 bool ScheduleEngine::nextChangeForZone(int i, time_t withinSecs, time_t& changeAt, bool& toComfort) const {
     if (i < 0 || i >= _zoneCount) return false;
     if (!_weather.comfortAllowed()) return false;
