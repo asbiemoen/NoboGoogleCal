@@ -165,6 +165,8 @@ void setup() {
     led.begin(nvmOr(nvm.mdnsName, MDNS_NAME));
 
     calendar.begin(ZONES, ZONE_COUNT);
+    calendar.setOnSync([](bool s) { led.setSyncing(s); });
+    calendar.setIdleTick([]() { led.tick(); });
     weather.begin(nvmOr(nvm.weatherCity, WEATHER_CITY), WEATHER_API_KEY);
     nobo.begin(nvmOr(nvm.noboIp, NOBO_HUB_IP), nvmOr(nvm.noboSerial, NOBO_HUB_SERIAL));
 

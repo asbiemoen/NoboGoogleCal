@@ -12,6 +12,7 @@ public:
     LEDDisplay();
     void begin(const char* hostname);
     void tick();
+    void setSyncing(bool s);
 
 private:
     ArduinoLEDMatrix _matrix;
@@ -21,6 +22,7 @@ private:
     int16_t  _scrollPos;
     int16_t  _scrollTotal;
     uint32_t _scrollStepMs;
+    bool     _syncing;
 
     void _buildMsg(char* buf, size_t len);
     void _renderToScrollBuf(const char* text);
