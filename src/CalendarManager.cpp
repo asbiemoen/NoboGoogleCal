@@ -48,6 +48,9 @@ void CalendarManager::begin(const ZoneConfig* zones, int zoneCount) {
 void CalendarManager::tick() {
     uint32_t now = millis();
 
+    // Let system fully boot before first sync — EEPROM events cover this window
+    if (now < 120000UL) return;
+
     // Each zone is synced one minute apart within the hour window
     // Zone 0 at :00, zone 1 at :01, etc.
     // We use (now / 60000) % SYNC_INTERVAL_MS to stagger fetches.
@@ -164,7 +167,7 @@ bool CalendarManager::_fetchIcs(const char* url, int zoneIndex) {
             // If no new data for 15 s the connection has stalled or finished
             // without a clean close — treat as end of stream and continue with
             // whatever events we've parsed so far.
-            if (millis() - lastDataMs > 15000UL) break;
+            if (millis() - lastDataMs > 4000UL) break;
             delay(1);
             continue;
         }

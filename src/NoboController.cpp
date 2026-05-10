@@ -20,7 +20,7 @@ bool NoboController::begin(const char* ip, const char* serial) {
     strncpy(_serial, serial, sizeof(_serial) - 1);
     _connected            = false;
     _lastKeepAlive        = 0;
-    _lastReconnectAttempt = 0;
+    _lastReconnectAttempt = 1;  // non-zero so first attempt waits 30 s, not immediate
     _nextOverrideId       = 1;
     _zoneCount            = 0;
     _profileCount         = 0;

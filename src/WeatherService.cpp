@@ -20,7 +20,7 @@ void WeatherService::begin(const char* city, const char* apiKey) {
 }
 
 void WeatherService::tick() {
-    if (_lastFetchMs == 0 && millis() < 30000UL) return; // let system settle first
+    if (_lastFetchMs == 0 && millis() < 150000UL) return; // let system settle and calendar sync first
     if (_lastFetchMs != 0 && millis() - _lastFetchMs < WEATHER_INTERVAL_MS) return;
     _fetch();
 }
