@@ -27,7 +27,7 @@ All operations run from the main `loop()` — there is no RTOS or interrupt sche
 |---|---|---|
 | Calendar sync | 60 min | Staggered: one zone per minute to avoid back-to-back blocking fetches |
 | Schedule evaluation | 60 sec | Reads current events and sends comfort/eco overrides to Nobø |
-| Weather update | 3 hours | Fetches daily average temperature from OpenWeatherMap; uses seasonal fallback on failure |
+| Weather update | 3 hours | Fetches daytime average temperature (06:00–18:00) from OpenWeatherMap; uses seasonal fallback on failure |
 | Nobø keepalive | 30 sec | Sends a `Y02` ping to keep the TCP connection alive |
 | Nobø reconnect | 30 sec | Retries connection automatically when disconnected |
 | NTP sync | On update | `NTPClient` updates passively; clock is re-anchored when a valid epoch arrives |
@@ -37,6 +37,8 @@ All operations run from the main `loop()` — there is no RTOS or interrupt sche
 ### Calendar sync in detail
 
 Each zone's ICS feed is fetched independently on a staggered schedule (zone 0 at minute 0, zone 1 at minute 1, etc.) so the loop is never blocked by two simultaneous downloads. A single fetch can take up to 15 seconds for a 13 KB feed; a 15-second stall detector breaks out early if the server stops sending data before TCP closes cleanly.
+
+The web server stays responsive during a sync via a cooperative `yield()` override that gives it a timeslice every 50 ms while the ICS download is waiting for data.
 
 On boot the last saved event list is loaded from EEPROM so the schedule is available immediately, before the first live sync completes.
 
@@ -52,14 +54,14 @@ The Arduino connects to the Nobø Energy Hub over TCP port 27779 using the Nobø
 - **Removed events** — detected on each sync; zone resets to default
 - **Overlap handling** — overlapping events merge into a single Comfort period
 - **Hourly sync** — fetches next 7 days from all calendars
-- **Weather integration** — skips Comfort if average daily temperature exceeds 10 °C
-- **Weather fallback** — uses seasonal logic when the API is unreachable
+- **Weather integration** — skips Comfort if daytime average temperature (06:00–18:00) exceeds 10 °C; prevents heating from running on warm days from roughly May through August/September
+- **Weather fallback** — suppresses Comfort in June, July and August when the API is unreachable
 - **mDNS** — board reachable at `heat.local` on the local network (configurable)
 - **Local web dashboard** — zone status, 7-day event view, sync status per zone, next-event countdown
 - **Session login** — dashboard is public; Settings page requires a password
 - **Runtime settings** — WiFi credentials, Nobø IP, weather city, hostname, email — all editable via the web UI and persisted to EEPROM; no reflash needed
 - **Daily email** — optional summary via [Resend.com](https://resend.com) with heating status and upcoming events
-- **LED display** — scrolling status, IP address at boot, heating countdown on the built-in LED matrix
+- **LED display** — scrolls `<hostname>.local <ip>` continuously on the built-in LED matrix
 - **Startup provisioning** — creates Nobø weekly programs automatically if they do not already exist
 - **Timestamped serial logging** — all log output includes Norway local time
 
@@ -107,11 +109,12 @@ NoboGoogleCal/
 Copy `arduino_secrets.example.h` to `arduino_secrets.h` and fill in your values:
 
 ```cpp
-#define SECRET_SSID  "your-wifi-ssid"
-#define SECRET_PASS  "your-wifi-password"
-// Optional secondary network:
-// #define SECRET_SSID2 "backup-ssid"
-// #define SECRET_PASS2 "backup-pass"
+#define SECRET_SSID   "your-wifi-ssid"
+#define SECRET_PASS   "your-wifi-password"
+
+// Secondary network — tried automatically if primary fails:
+#define SECRET_SSID2  ""
+#define SECRET_PASS2  ""
 ```
 
 ### 2. Installation config
