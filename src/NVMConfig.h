@@ -21,9 +21,10 @@ struct NVMConfig {
     char resendTo[64];
     bool emailEnabled;
     char emailTime[6];   // "HH:MM\0"
+    char mdnsName[32];
 };
 
-static const uint16_t NVM_MAGIC = 0xAB12;
+static const uint16_t NVM_MAGIC = 0xAB13;
 
 inline void nvmLoad(NVMConfig& cfg) {
     EEPROM.get(0, cfg);

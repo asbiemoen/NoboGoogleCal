@@ -457,6 +457,9 @@ void AppWebServer::_serveSettingsPage(WiFiClient& client) {
     client.print(F("\" placeholder=\"(optional)\">"));
     client.print(F("<label>Secondary WiFi password</label>"));
     client.print(F("<input type=\"password\" name=\"wifi2_pass\" autocomplete=\"new-password\" placeholder=\"(optional)\">"));
+    client.print(F("<label>Local hostname (.local)</label><input type=\"text\" name=\"mdns_name\" value=\""));
+    if (_nvm) client.print(_nvm->mdnsName);
+    client.print(F("\" placeholder=\"varme\">"));
     client.print(F("<label>Nob&oslash; hub IP</label><input type=\"text\" name=\"nobo_ip\" value=\""));
     if (_nvm) client.print(_nvm->noboIp);
     client.print(F("\" placeholder=\"192.168.x.x\">"));
@@ -698,6 +701,7 @@ void AppWebServer::_serveSettings(WiFiClient& client, const char* body, int len)
         upd(_nvm->wifiPass,   sizeof(_nvm->wifiPass),   "wifi_pass",   true);
         upd(_nvm->wifiSsid2,  sizeof(_nvm->wifiSsid2),  "wifi2_ssid",  true);
         upd(_nvm->wifiPass2,  sizeof(_nvm->wifiPass2),  "wifi2_pass",  true);
+        upd(_nvm->mdnsName,   sizeof(_nvm->mdnsName),   "mdns_name",   true);
         upd(_nvm->noboIp,     sizeof(_nvm->noboIp),     "nobo_ip",     true);
         upd(_nvm->noboSerial, sizeof(_nvm->noboSerial), "nobo_serial", true);
 

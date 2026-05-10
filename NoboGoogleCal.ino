@@ -1,5 +1,6 @@
 #include <time.h>      // must precede RTC.h — fully defines struct tm before wchar.h sees it
 #include <WiFiS3.h>
+#include <WiFiMDNS.h>
 #include <RTC.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
@@ -148,6 +149,11 @@ void setup() {
                  loc->tm_hour, loc->tm_min, loc->tm_sec, off / 3600);
         Serial.println(tbuf);
     }
+
+    MDNS.begin(nvmOr(nvm.mdnsName, MDNS_NAME));
+    Serial.print(F("mDNS: "));
+    Serial.print(nvmOr(nvm.mdnsName, MDNS_NAME));
+    Serial.println(F(".local"));
 
     engine.begin(ZONES, ZONE_COUNT);
     webServer.begin(nvmOr(nvm.webPassword, WEB_PASSWORD), nvm);
