@@ -4,6 +4,12 @@
 #include "CalendarManager.h"
 #include "WeatherService.h"
 
+struct ZoneOverride {
+    bool   active;
+    time_t until;
+    bool   isBoost;
+};
+
 class ScheduleEngine {
 public:
     ScheduleEngine(NoboController& nobo, CalendarManager& cal, WeatherService& weather);
@@ -26,6 +32,10 @@ public:
     // changeAt: epoch of the boundary. toComfort: true=turning on, false=turning off.
     bool nextChangeForZone(int i, time_t withinSecs, time_t& changeAt, bool& toComfort) const;
 
+    void   setOverride(int zone, float hours);
+    bool   overrideActive(int zone) const { return (zone >= 0 && zone < _zoneCount) && _overrides[zone].active; }
+    time_t overrideUntil(int zone)  const { return (zone >= 0 && zone < _zoneCount) ? _overrides[zone].until : 0; }
+
 private:
     NoboController& _nobo;
     CalendarManager& _cal;
@@ -34,6 +44,7 @@ private:
     const ZoneConfig* _zones;
     int               _zoneCount;
     ZoneState         _states[MAX_ZONES];
+    ZoneOverride      _overrides[MAX_ZONES];
     uint32_t          _lastTickMs;
     char              _statusBuf[64];
     char              _nextEventBuf[64];

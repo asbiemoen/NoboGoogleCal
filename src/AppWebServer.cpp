@@ -89,6 +89,11 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 @media(max-width:480px){header{flex-wrap:wrap;gap:.5rem}}
 @media(max-width:400px){.ev-t{min-width:80px}.hero-zone-name{min-width:120px}}
 @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-4px)}40%,80%{transform:translateX(4px)}}.shake{animation:shake .35s ease}
+.hero-override{padding:.1rem 1.25rem .6rem;gap:.5rem;flex-wrap:wrap}
+.btn-ov{border:none;padding:.3rem .9rem;border-radius:9999px;font-size:.78rem;font-weight:600;cursor:pointer}
+.btn-ov-boost{background:#15803d;color:#fff}
+.btn-ov-mute{background:#dc2626;color:#fff}
+.btn-ov-cancel{background:#f59e0b;color:#000}
 </style>
 </head>
 <body>
@@ -98,14 +103,16 @@ static const char HTML_FOOT_SCRIPT[] PROGMEM = R"html(
 <script>
 var _pw=sessionStorage.getItem('nbc_pw')||'';
 function $(i){return document.getElementById(i);}
-if(_pw){$('loginBtn').style.display='none';$('settingsBtn').style.display='';}
+function _showOv(show){document.querySelectorAll('.ov-btns').forEach(function(el){el.style.display=show?'flex':'none';});}
+if(_pw){$('loginBtn').style.display='none';$('settingsBtn').style.display='';_showOv(true);}
 function openLogin(){$('settingsView').style.display='none';$('loginView').style.display='';$('loginInput').value='';$('loginErr').style.display='none';$('mainModal').classList.add('open');}
 function openSettings(){$('loginView').style.display='none';$('settingsView').style.display='';$('authInput').value=_pw;$('mainModal').classList.add('open');}
 function closeModal(){$('mainModal').classList.remove('open');}
-function doLogin(e){e.preventDefault();var p=$('loginInput').value;if(!p)return;fetch('/login',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'auth='+encodeURIComponent(p)}).then(function(r){if(r.ok){_pw=p;sessionStorage.setItem('nbc_pw',p);closeModal();$('loginBtn').style.display='none';$('settingsBtn').style.display='';}else{$('loginErr').style.display='block';var inp=$('loginInput');inp.classList.add('shake');setTimeout(function(){inp.classList.remove('shake');},400);}});}
-function doLogout(){sessionStorage.removeItem('nbc_pw');_pw='';$('settingsBtn').style.display='none';$('loginBtn').style.display='';closeModal();}
+function doLogin(e){e.preventDefault();var p=$('loginInput').value;if(!p)return;fetch('/login',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'auth='+encodeURIComponent(p)}).then(function(r){if(r.ok){_pw=p;sessionStorage.setItem('nbc_pw',p);closeModal();$('loginBtn').style.display='none';$('settingsBtn').style.display='';_showOv(true);}else{$('loginErr').style.display='block';var inp=$('loginInput');inp.classList.add('shake');setTimeout(function(){inp.classList.remove('shake');},400);}});}
+function doLogout(){sessionStorage.removeItem('nbc_pw');_pw='';$('settingsBtn').style.display='none';$('loginBtn').style.display='';_showOv(false);closeModal();}
 function saveSettings(){var np=$('newPwInput').value;if(np){_pw=np;sessionStorage.setItem('nbc_pw',np);}$('authInput').value=_pw;$('settingsForm').action='/api/settings';$('settingsForm').submit();}
 function doSync(){if(!_pw)return;$('pwHidden').value=_pw;$('settingsForm').action='/sync';$('settingsForm').submit();}
+function doOverride(z,a){var h;if(a<0){h=window.prompt('Hours (e.g. 2 or 0.5):','2');if(h===null)return;h=parseFloat(h)||2;}else{h=a;}fetch('/api/override',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'auth='+encodeURIComponent(_pw)+'&zone='+z+'&hours='+h}).then(function(r){if(r.ok)location.reload();});}
 </script>
 </body></html>
 )html";
@@ -209,6 +216,8 @@ void AppWebServer::_handleClient(WiFiClient& client) {
         _serveSync(client, body, bodyLen);
     } else if (isPost && strstr(reqLine, "POST /login")) {
         _serveLogin(client, body, bodyLen);
+    } else if (isPost && strstr(reqLine, "POST /api/override")) {
+        _serveOverride(client, body, bodyLen);
     } else {
         _sendHeader(client, 404, "text/plain");
         client.print(F("Not found"));
@@ -301,6 +310,27 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
         client.print(F("\">"));
         client.print(statusStr);
         client.print(F("</span></div>"));
+        client.print(F("<div class=\"hero-override ov-btns\" style=\"display:none\">"));
+        bool ovActive  = _engine.overrideActive(i);
+        bool isComfort = (_engine.zoneStatus(i) == STATUS_COMFORT);
+        if (ovActive) {
+            char btnBuf[72];
+            snprintf(btnBuf, sizeof(btnBuf),
+                "<button class=\"btn-ov btn-ov-cancel\" onclick=\"doOverride(%d,0)\">Cancel override</button>", i);
+            client.print(btnBuf);
+        }
+        {
+            char btnBuf[80];
+            if (isComfort) {
+                snprintf(btnBuf, sizeof(btnBuf),
+                    "<button class=\"btn-ov btn-ov-mute\" onclick=\"doOverride(%d,-1)\">Mute</button>", i);
+            } else {
+                snprintf(btnBuf, sizeof(btnBuf),
+                    "<button class=\"btn-ov btn-ov-boost\" onclick=\"doOverride(%d,-1)\">Boost</button>", i);
+            }
+            client.print(btnBuf);
+        }
+        client.print(F("</div>"));
     }
 
     if (soonestChange > 0) {
@@ -777,6 +807,27 @@ void AppWebServer::_serveLogin(WiFiClient& client, const char* body, int len) {
         _sendHeader(client, 401, "text/plain");
         client.print(F("Unauthorized"));
     }
+}
+
+// ─── Override POST ────────────────────────────────────────────────────────────
+
+void AppWebServer::_serveOverride(WiFiClient& client, const char* body, int len) {
+    char auth[64] = {};
+    _parseBody(body, len, "auth", auth, sizeof(auth));
+    if (strncmp(auth, _password, sizeof(_password)) != 0) {
+        _sendHeader(client, 401, "text/plain");
+        client.print(F("Unauthorized"));
+        return;
+    }
+    char zoneBuf[8]  = {};
+    char hoursBuf[8] = {};
+    _parseBody(body, len, "zone",  zoneBuf,  sizeof(zoneBuf));
+    _parseBody(body, len, "hours", hoursBuf, sizeof(hoursBuf));
+    int   zone  = atoi(zoneBuf);
+    float hours = (float)atof(hoursBuf);
+    _engine.setOverride(zone, hours);
+    _sendHeader(client, 200, "text/plain");
+    client.print(F("OK"));
 }
 
 bool AppWebServer::_checkAuth(const char* /*headers*/) { return false; }
