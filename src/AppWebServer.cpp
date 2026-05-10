@@ -88,37 +88,56 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .section-title{font-size:.72rem;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:.08em;padding:0 1.5rem .4rem}
 @media(max-width:480px){header{flex-wrap:wrap;gap:.5rem}}
 @media(max-width:400px){.ev-t{min-width:80px}.hero-zone-name{min-width:120px}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-4px)}40%,80%{transform:translateX(4px)}}.shake{animation:shake .35s ease}
 </style>
 </head>
 <body>
 )html";
 
 static const char HTML_FOOT[] PROGMEM = R"html(
-<div class="modal-overlay" id="settingsModal">
+<div class="modal-overlay" id="mainModal">
 <div class="modal">
-<h2>Settings</h2>
+<div id="loginView">
+<h2>Login</h2>
+<form onsubmit="doLogin(event)">
+<label>Password</label>
+<input type="password" id="loginInput" placeholder="Enter password" autocomplete="current-password">
+<span id="loginErr" style="display:none;color:#f87171;font-size:.75rem;margin-top:.4rem">Wrong password</span>
+<div class="actions">
+<button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
+<button type="submit" class="btn-save">Login</button>
+</div>
+</form>
+</div>
+<div id="settingsView" style="display:none">
+<h2>Settings <button type="button" class="btn-cancel" style="float:right;padding:.25rem .5rem" onclick="doLogout()">Lock</button></h2>
 <form id="settingsForm" method="POST" action="/api/settings">
 <input type="hidden" name="pw" id="pwHidden">
-<label>Password</label>
-<input type="password" name="auth" id="authInput" placeholder="Enter password" required>
+<input type="hidden" name="auth" id="authInput">
 <label>New password (leave blank to keep current)</label>
-<input type="password" name="new_password" autocomplete="new-password">
+<input type="password" id="newPwInput" name="new_password" autocomplete="new-password">
 <label>Weather city</label>
 <input type="text" name="weather_city" placeholder="Oslo">
 <div class="actions">
-<button type="button" class="btn-cancel" onclick="closeSettings()">Cancel</button>
+<button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
 <button type="button" class="btn-cancel" onclick="doSync()">&#x21bb; Sync now</button>
 <button type="button" class="btn-save" onclick="saveSettings()">Save</button>
 </div>
 </form>
 </div>
 </div>
+</div>
 <script>
 var _pw=sessionStorage.getItem('nbc_pw')||'';
-function openSettings(){var i=document.getElementById('authInput');if(_pw&&!i.value)i.value=_pw;document.getElementById('settingsModal').classList.add('open');}
-function closeSettings(){document.getElementById('settingsModal').classList.remove('open');}
-function saveSettings(){var p=document.getElementById('authInput').value;if(p){_pw=p;sessionStorage.setItem('nbc_pw',p);}var f=document.getElementById('settingsForm');f.action='/api/settings';f.submit();}
-function doSync(){var p=document.getElementById('authInput').value;if(!p)return;_pw=p;sessionStorage.setItem('nbc_pw',p);document.getElementById('pwHidden').value=p;var f=document.getElementById('settingsForm');f.action='/sync';f.submit();}
+function $(i){return document.getElementById(i);}
+if(_pw){$('loginBtn').style.display='none';$('settingsBtn').style.display='';}
+function openLogin(){$('settingsView').style.display='none';$('loginView').style.display='';$('loginInput').value='';$('loginErr').style.display='none';$('mainModal').classList.add('open');}
+function openSettings(){$('loginView').style.display='none';$('settingsView').style.display='';$('authInput').value=_pw;$('mainModal').classList.add('open');}
+function closeModal(){$('mainModal').classList.remove('open');}
+function doLogin(e){e.preventDefault();var p=$('loginInput').value;if(!p)return;fetch('/login',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'auth='+encodeURIComponent(p)}).then(function(r){if(r.ok){_pw=p;sessionStorage.setItem('nbc_pw',p);closeModal();$('loginBtn').style.display='none';$('settingsBtn').style.display='';}else{$('loginErr').style.display='block';var inp=$('loginInput');inp.classList.add('shake');setTimeout(function(){inp.classList.remove('shake');},400);}});}
+function doLogout(){sessionStorage.removeItem('nbc_pw');_pw='';$('settingsBtn').style.display='none';$('loginBtn').style.display='';closeModal();}
+function saveSettings(){var np=$('newPwInput').value;if(np){_pw=np;sessionStorage.setItem('nbc_pw',np);}$('authInput').value=_pw;$('settingsForm').action='/api/settings';$('settingsForm').submit();}
+function doSync(){if(!_pw)return;$('pwHidden').value=_pw;$('settingsForm').action='/sync';$('settingsForm').submit();}
 </script>
 </body></html>
 )html";
@@ -213,6 +232,8 @@ void AppWebServer::_handleClient(WiFiClient& client) {
         _serveSettings(client, body, bodyLen);
     } else if (isPost && strstr(reqLine, "POST /sync")) {
         _serveSync(client, body, bodyLen);
+    } else if (isPost && strstr(reqLine, "POST /login")) {
+        _serveLogin(client, body, bodyLen);
     } else {
         _sendHeader(client, 404, "text/plain");
         client.print(F("Not found"));
@@ -267,7 +288,8 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
         client.print(lastSync);
         client.print(F("</span>"));
     }
-    client.print(F("<button class=\"settings-btn\" onclick=\"openSettings()\">&#9881; Settings</button>"));
+    client.print(F("<button class=\"settings-btn\" id=\"loginBtn\" onclick=\"openLogin()\">&#128274; Login</button>"));
+    client.print(F("<button class=\"settings-btn\" id=\"settingsBtn\" style=\"display:none\" onclick=\"openSettings()\">&#9881; Settings</button>"));
     client.print(F("</div></header>"));
 
     // 4. Hero — one row per zone + optional countdown badge
@@ -630,6 +652,20 @@ void AppWebServer::_serveSync(WiFiClient& client, const char* body, int len) {
     client.print(F("HTTP/1.1 303 See Other\r\nLocation: /?syncing=1\r\nContent-Length: 0\r\n\r\n"));
     client.flush();
     _cal.forceSyncAll();
+}
+
+// ─── Login POST ───────────────────────────────────────────────────────────────
+
+void AppWebServer::_serveLogin(WiFiClient& client, const char* body, int len) {
+    char auth[64] = {};
+    _parseBody(body, len, "auth", auth, sizeof(auth));
+    if (strncmp(auth, _password, sizeof(_password)) == 0) {
+        _sendHeader(client, 200, "text/plain");
+        client.print(F("OK"));
+    } else {
+        _sendHeader(client, 401, "text/plain");
+        client.print(F("Unauthorized"));
+    }
 }
 
 bool AppWebServer::_checkAuth(const char* /*headers*/) { return false; }
