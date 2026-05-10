@@ -179,7 +179,13 @@ void setup() {
     if (!nvm.resendTo[0])   strncpy(nvm.resendTo,   RESEND_TO,        sizeof(nvm.resendTo)   - 1);
 #endif
 #ifdef EMAIL_DAILY_TIME
-    if (!nvm.emailTime[0])  strncpy(nvm.emailTime,  EMAIL_DAILY_TIME, sizeof(nvm.emailTime)  - 1);
+    if (!nvm.emailTime[0])       strncpy(nvm.emailTime,      EMAIL_DAILY_TIME, sizeof(nvm.emailTime)      - 1);
+#endif
+#ifdef EMAIL_FREQUENCY
+    if (!nvm.emailFrequency[0])  strncpy(nvm.emailFrequency, EMAIL_FREQUENCY,  sizeof(nvm.emailFrequency) - 1);
+#endif
+#ifdef EMAIL_WEEKDAY
+    if (!nvm.emailFrequency[0])  nvm.emailWeekday = EMAIL_WEEKDAY;
 #endif
 
     emailService.begin(nvm, engine, calendar);

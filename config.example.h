@@ -22,7 +22,9 @@
 // #define RESEND_API_KEY   "re_..."
 // #define RESEND_FROM      "noreply@yourdomain.com"
 // #define RESEND_TO        "you@example.com"
-// #define EMAIL_DAILY_TIME "07:00"   // HH:MM Norway local time
+// #define EMAIL_DAILY_TIME "07:00"       // HH:MM Norway local time
+// #define EMAIL_FREQUENCY  "daily"       // "daily" or "weekly"
+// #define EMAIL_WEEKDAY    1             // 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat
 
 // ─── Zone configuration ───────────────────────────────────────────────────────
 // One entry per heating zone. Each zone maps to one Nobø weekly program

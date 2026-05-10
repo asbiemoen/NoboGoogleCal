@@ -20,11 +20,11 @@ void EmailService::tick() {
     if (!_shouldSend()) return;
 
     time_t now = time(nullptr);
-    struct tm* utc = gmtime(&now);
-    if (_lastSentDay == utc->tm_yday) return;
+    struct tm* utcTm = gmtime(&now);
+    if (_lastSentDay == utcTm->tm_yday) return;
 
     if (_send()) {
-        _lastSentDay = utc->tm_yday;
+        _lastSentDay = utcTm->tm_yday;
     }
 }
 
@@ -48,7 +48,13 @@ bool EmailService::_shouldSend() const {
     time_t localNow = now + (time_t)off;
     struct tm lTm = *gmtime(&localNow);
 
-    return (lTm.tm_hour == hh && lTm.tm_min >= mm && lTm.tm_min < mm + 5);
+    if (lTm.tm_hour != hh || lTm.tm_min < mm || lTm.tm_min >= mm + 5) return false;
+
+    // Weekly mode: only send on the configured weekday
+    bool weekly = (_nvm->emailFrequency[0] && strcmp(_nvm->emailFrequency, "weekly") == 0);
+    if (weekly && lTm.tm_wday != (int)_nvm->emailWeekday) return false;
+
+    return true;
 }
 
 int EmailService::_buildBody(char* buf, int len) const {
