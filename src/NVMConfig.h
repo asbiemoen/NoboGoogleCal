@@ -24,14 +24,14 @@ struct NVMConfig {
     char mdnsName[32];
 };
 
-static const uint16_t NVM_MAGIC = 0xAB13;
+static const uint16_t NVM_MAGIC = 0xAB14;
 
 inline void nvmLoad(NVMConfig& cfg) {
     EEPROM.get(0, cfg);
     if (cfg.magic != NVM_MAGIC) {
         memset(&cfg, 0, sizeof(cfg));
         cfg.magic = NVM_MAGIC;
-        cfg.emailEnabled = false;
+        cfg.emailEnabled = true;
         strncpy(cfg.emailTime, "07:00", sizeof(cfg.emailTime) - 1);
     }
 }
