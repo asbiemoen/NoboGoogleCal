@@ -16,13 +16,21 @@ void ScheduleEngine::begin(const ZoneConfig* zones, int zoneCount) {
     _zoneCount = zoneCount;
 
     for (int i = 0; i < zoneCount && i < MAX_ZONES; i++) {
-        _states[i] = { zones[i].defaultStatus, -1, -1 };
+        _states[i]    = { zones[i].defaultStatus, -1, -1 };
+        _overrides[i] = { false, 0, false };
     }
 }
 
 void ScheduleEngine::tick() {
     if (millis() - _lastTickMs < ENGINE_INTERVAL_MS) return;
     _lastTickMs = millis();
+
+    // Expire overrides whose time has passed
+    time_t now = time(nullptr);
+    for (int i = 0; i < _zoneCount; i++) {
+        if (_overrides[i].active && now >= _overrides[i].until)
+            _overrides[i].active = false;
+    }
 
     for (int i = 0; i < _zoneCount; i++) {
         _evaluateZone(i);
@@ -142,13 +150,35 @@ void ScheduleEngine::_evaluateZone(int i) {
     }
 }
 
+void ScheduleEngine::setOverride(int zone, float hours) {
+    if (zone < 0 || zone >= _zoneCount) return;
+    if (hours <= 0.0f || _overrides[zone].active) {
+        _overrides[zone].active = false;
+        _evaluateZone(zone);
+        return;
+    }
+    _overrides[zone].active  = true;
+    _overrides[zone].until   = time(nullptr) + (time_t)(hours * 3600.0f + 0.5f);
+    _overrides[zone].isBoost = (_states[zone].current != STATUS_COMFORT);
+    Serial.print(F("[Engine] Override zone "));
+    Serial.print(_zones[zone].name);
+    Serial.println(_overrides[zone].isBoost ? F(" BOOST") : F(" MUTE"));
+    _evaluateZone(zone);
+}
+
 HeatingStatus ScheduleEngine::_desiredStatus(int zoneIndex) const {
-    if (!_weather.comfortAllowed()) {
+    const ZoneOverride& ov = _overrides[zoneIndex];
+    if (ov.active) {
+        if (ov.isBoost) return STATUS_COMFORT;
+        // Mute: yield if calendar/preheat window is active
+        time_t dummy;
+        if (_comfortWindowActive(zoneIndex, dummy)) return STATUS_COMFORT;
         return _zones[zoneIndex].defaultStatus;
     }
+    if (!_weather.comfortAllowed()) return _zones[zoneIndex].defaultStatus;
     time_t dummy;
     return _comfortWindowActive(zoneIndex, dummy) ? STATUS_COMFORT
-                                                   : _zones[zoneIndex].defaultStatus;
+                                                  : _zones[zoneIndex].defaultStatus;
 }
 
 bool ScheduleEngine::_comfortWindowActive(int zoneIndex, time_t& comfortUntil) const {
