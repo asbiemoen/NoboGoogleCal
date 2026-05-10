@@ -30,7 +30,7 @@ bool WeatherService::_fetch() {
 
     char path[128];
     snprintf(path, sizeof(path),
-             "/data/2.5/weather?q=%s&appid=%s&units=metric",
+             "/data/2.5/forecast?q=%s&appid=%s&units=metric&cnt=16",
              _city, _apiKey);
 
     WiFiSSLClient ssl;
@@ -59,10 +59,11 @@ bool WeatherService::_fetch() {
 
     http.skipResponseHeaders();
 
-    // Stream JSON directly — avoids a large stack buffer and handles any response size
-    StaticJsonDocument<32>  filter;
-    filter["main"]["temp"] = true;
-    StaticJsonDocument<64>  doc;
+    // Filter to dt + main.temp across all list entries
+    StaticJsonDocument<64>    filter;
+    filter["list"][0]["dt"]           = true;
+    filter["list"][0]["main"]["temp"] = true;
+    StaticJsonDocument<1200>  doc;
     DeserializationError jerr = deserializeJson(doc, http,
                                                 DeserializationOption::Filter(filter));
     http.stop();
@@ -75,20 +76,52 @@ bool WeatherService::_fetch() {
         return false;
     }
 
-    _currentTemp    = doc["main"]["temp"] | 0.0f;
-    _available      = true;
+    // Determine today's date in Norway local time
+    time_t    now    = time(nullptr);
+    struct tm nowUtc = *gmtime(&now);
+    extern int norwayOffsetSeconds(const struct tm*);
+    int    off      = norwayOffsetSeconds(&nowUtc);
+    time_t localNow = now + (time_t)off;
+    struct tm lNow  = *gmtime(&localNow);
+
+    // Average forecast slots that fall on today; fall back to first slot if none
+    float sum      = 0.0f;
+    int   count    = 0;
+    float firstTemp = 0.0f;
+    bool  gotFirst  = false;
+
+    for (JsonObject entry : doc["list"].as<JsonArray>()) {
+        float t = entry["main"]["temp"] | 0.0f;
+        if (!gotFirst) { firstTemp = t; gotFirst = true; }
+
+        time_t dt       = (time_t)entry["dt"].as<long>();
+        struct tm dUtc  = *gmtime(&dt);
+        int dOff        = norwayOffsetSeconds(&dUtc);
+        time_t localDt  = dt + (time_t)dOff;
+        struct tm lDt   = *gmtime(&localDt);
+        if (lDt.tm_mday == lNow.tm_mday && lDt.tm_mon  == lNow.tm_mon
+                                        && lDt.tm_year == lNow.tm_year) {
+            sum += t;
+            count++;
+        }
+    }
+
+    _currentTemp    = (count > 0) ? (sum / (float)count) : (gotFirst ? firstTemp : 0.0f);
+    _available      = gotFirst;
     _comfortAllowed = (_currentTemp <= 10.0f);
 
     Serial.print(F("[Weather] "));
     Serial.print(_city);
-    Serial.print(F(": "));
+    Serial.print(F(": daily avg "));
     Serial.print(_currentTemp);
-    Serial.print(F(" C — comfort "));
+    Serial.print(F("C ("));
+    Serial.print(count);
+    Serial.print(F(" slots) — comfort "));
     Serial.println(_comfortAllowed ? F("allowed") : F("suppressed"));
 
     char msg[APP_LOG_WIDTH];
-    snprintf(msg, sizeof(msg), "Weather: %.1fC%s",
-             _currentTemp, _comfortAllowed ? "" : " (warm)");
+    snprintf(msg, sizeof(msg), "Weather: %.1fC avg (%d slots)%s",
+             _currentTemp, count, _comfortAllowed ? "" : " (warm)");
     AppLog::add(msg);
     return true;
 }

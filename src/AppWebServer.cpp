@@ -89,6 +89,8 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 @media(max-width:480px){header{flex-wrap:wrap;gap:.5rem}}
 @media(max-width:400px){.ev-t{min-width:80px}.hero-zone-name{min-width:120px}}
 @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-4px)}40%,80%{transform:translateX(4px)}}.shake{animation:shake .35s ease}
+.temp-sub{font-size:.72rem;color:#94a3b8;text-align:center;margin-top:-.2rem}
+.threshold{font-size:.82rem;color:#94a3b8}
 .hero-override{padding:.1rem 1.25rem .6rem;gap:.5rem;flex-wrap:wrap}
 .btn-ov{border:none;padding:.3rem .9rem;border-radius:9999px;font-size:.78rem;font-weight:600;cursor:pointer}
 .btn-ov-boost{background:#15803d;color:#fff}
@@ -350,26 +352,36 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
     // 5. Weather card
     client.print(F("<div class=\"weather\">"));
     bool weatherOk = _weather.isAvailable();
+    char tempBuf[16];
     if (weatherOk) {
-        char tempBuf[16];
         dtostrf(_weather.currentTemp(), 4, 1, tempBuf);
+        client.print(F("<div>"));
         client.print(F("<div class=\"temp\">"));
         client.print(tempBuf);
         client.print(F(" &deg;C</div>"));
+        client.print(F("<div class=\"temp-sub\">daily avg</div>"));
+        client.print(F("</div>"));
     } else {
         client.print(F("<div class=\"temp-na\">-- &deg;C</div>"));
     }
     client.print(F("<div class=\"info\">"));
     client.print(_weather.city());
-    client.print(F("<br>"));
+    client.print(F("<br>Daily avg outdoor temperature"));
     if (!weatherOk) {
-        client.print(F("Weather data unavailable &mdash; using seasonal fallback<br>"));
+        client.print(F("<br><span style=\"color:#f87171\">Data unavailable &mdash; seasonal fallback</span>"));
     }
-    client.print(F("Heating control: "));
-    client.print(_weather.comfortAllowed()
-                 ? F("<span class=\"allowed\">enabled</span>")
-                 : F("<span class=\"suppressed\">paused &mdash; too warm outside</span>"));
-    client.print(F("</div></div>"));
+    client.print(F("<br><span class=\"threshold\">10&deg;C threshold &middot; today: "));
+    if (weatherOk) {
+        client.print(tempBuf);
+        client.print(_weather.comfortAllowed()
+            ? F("&deg;C <span class=\"allowed\">&#10003; below &mdash; heating active</span>")
+            : F("&deg;C <span class=\"suppressed\">&#10007; above &mdash; heating paused</span>"));
+    } else {
+        client.print(_weather.comfortAllowed()
+            ? F("<span class=\"allowed\">heating active (seasonal)</span>")
+            : F("<span class=\"suppressed\">heating paused (seasonal)</span>"));
+    }
+    client.print(F("</span></div></div>"));
 
     // 7. Zone cards
     client.print(F("<div class=\"zones\">"));
