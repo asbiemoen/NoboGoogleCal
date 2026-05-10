@@ -86,8 +86,6 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .hero-countdown{display:inline-block;margin-top:.5rem;font-size:.78rem;font-weight:600;color:#fb923c;background:#451a03;border-radius:.4rem;padding:.25rem .6rem}
 .zone-warn{font-size:.73rem;color:#f87171;padding:.2rem 1.25rem;background:#450a0a}
 .section-title{font-size:.72rem;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:.08em;padding:0 1.5rem .4rem}
-.sync-bar{padding:.25rem 1.5rem .75rem;display:flex;align-items:center}
-.sync-pw{background:#0f1117;border:1px solid #2d3748;color:#e2e8f0;padding:.4rem .75rem;border-radius:.4rem;font-size:.82rem;margin-right:.5rem;width:140px}
 @media(max-width:480px){header{flex-wrap:wrap;gap:.5rem}}
 @media(max-width:400px){.ev-t{min-width:80px}.hero-zone-name{min-width:120px}}
 </style>
@@ -99,22 +97,28 @@ static const char HTML_FOOT[] PROGMEM = R"html(
 <div class="modal-overlay" id="settingsModal">
 <div class="modal">
 <h2>Settings</h2>
-<form method="POST" action="/api/settings">
-<label>Password to unlock settings</label>
-<input type="password" name="auth" placeholder="Enter password" required>
-<label>New web password (leave blank to keep current)</label>
+<form id="settingsForm" method="POST" action="/api/settings">
+<input type="hidden" name="pw" id="pwHidden">
+<label>Password</label>
+<input type="password" name="auth" id="authInput" placeholder="Enter password" required>
+<label>New password (leave blank to keep current)</label>
 <input type="password" name="new_password" autocomplete="new-password">
 <label>Weather city</label>
 <input type="text" name="weather_city" placeholder="Oslo">
 <div class="actions">
-<button type="button" class="btn-cancel" onclick="document.getElementById('settingsModal').classList.remove('open')">Cancel</button>
-<button type="submit" class="btn-save">Save</button>
+<button type="button" class="btn-cancel" onclick="closeSettings()">Cancel</button>
+<button type="button" class="btn-cancel" onclick="doSync()">&#x21bb; Sync now</button>
+<button type="button" class="btn-save" onclick="saveSettings()">Save</button>
 </div>
 </form>
 </div>
 </div>
 <script>
-function openSettings(){document.getElementById('settingsModal').classList.add('open')}
+var _pw=sessionStorage.getItem('nbc_pw')||'';
+function openSettings(){var i=document.getElementById('authInput');if(_pw&&!i.value)i.value=_pw;document.getElementById('settingsModal').classList.add('open');}
+function closeSettings(){document.getElementById('settingsModal').classList.remove('open');}
+function saveSettings(){var p=document.getElementById('authInput').value;if(p){_pw=p;sessionStorage.setItem('nbc_pw',p);}var f=document.getElementById('settingsForm');f.action='/api/settings';f.submit();}
+function doSync(){var p=document.getElementById('authInput').value;if(!p)return;_pw=p;sessionStorage.setItem('nbc_pw',p);document.getElementById('pwHidden').value=p;var f=document.getElementById('settingsForm');f.action='/sync';f.submit();}
 </script>
 </body></html>
 )html";
@@ -308,13 +312,7 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
 
     client.print(F("</div>"));
 
-    // 5. Manual sync form
-    client.print(F("<div class=\"sync-bar\"><form method=\"POST\" action=\"/sync\">"));
-    client.print(F("<input type=\"password\" name=\"pw\" placeholder=\"Password\" class=\"sync-pw\">"));
-    client.print(F("<button type=\"submit\" class=\"settings-btn\">&#x21bb; Sync now</button>"));
-    client.print(F("</form></div>"));
-
-    // 6. Weather card
+    // 5. Weather card
     client.print(F("<div class=\"weather\">"));
     bool weatherOk = _weather.isAvailable();
     if (weatherOk) {
