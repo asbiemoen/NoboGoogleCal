@@ -44,6 +44,11 @@ HeatingStatus ScheduleEngine::zoneStatus(int i) const {
 const char* ScheduleEngine::statusString()    const { return _statusBuf; }
 const char* ScheduleEngine::nextEventString() const { return _nextEventBuf; }
 
+const char* ScheduleEngine::zoneEventLabel(int i) const {
+    if (i < 0 || i >= _zoneCount || !_zones[i].eventLabel) return "Event";
+    return _zones[i].eventLabel;
+}
+
 bool ScheduleEngine::nextChangeForZone(int i, time_t withinSecs, time_t& changeAt, bool& toComfort) const {
     if (i < 0 || i >= _zoneCount) return false;
     if (!_weather.comfortAllowed()) return false;

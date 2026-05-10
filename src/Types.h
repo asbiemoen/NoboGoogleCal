@@ -29,6 +29,7 @@ struct ZoneConfig {
     const char*   icsUrl;
     uint8_t       preheatHours;
     HeatingStatus defaultStatus;
+    const char*   eventLabel;   // shown when Google returns "Busy"; e.g. "Church event"
 };
 
 struct CalEvent {
