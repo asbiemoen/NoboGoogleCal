@@ -2,14 +2,15 @@
 #include <WiFiS3.h>
 #include <WiFiUdp.h>
 
-// Minimal mDNS responder — answers A-record queries for <hostname>.local
+// Minimal mDNS — sends periodic unsolicited announcements so that
+// <hostname>.local resolves on the local network without keeping a
+// persistent multicast socket open (which conflicts with WiFiServer on R4).
 class MiniMDNS {
 public:
     void begin(const char* hostname);
-    void run();
+    void run();   // call from loop(); announces on boot and every 60 s
 private:
-    WiFiUDP _udp;
-    char    _hostname[32];
-    void    _handlePacket(const uint8_t* buf, int len);
-    void    _sendResponse(uint16_t txId);
+    char     _hostname[32];
+    uint32_t _lastMs;
+    void     _announce();
 };
