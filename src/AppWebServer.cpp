@@ -365,10 +365,10 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
     if (!weatherOk) {
         client.print(F("Weather data unavailable &mdash; using seasonal fallback<br>"));
     }
-    client.print(F("Comfort heating: "));
+    client.print(F("Heating control: "));
     client.print(_weather.comfortAllowed()
-                 ? F("<span class=\"allowed\">Active</span>")
-                 : F("<span class=\"suppressed\">Suppressed (too warm)</span>"));
+                 ? F("<span class=\"allowed\">enabled</span>")
+                 : F("<span class=\"suppressed\">paused &mdash; too warm outside</span>"));
     client.print(F("</div></div>"));
 
     // 7. Zone cards
