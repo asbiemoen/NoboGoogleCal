@@ -13,6 +13,7 @@
 #include "src/ScheduleEngine.h"
 #include "src/AppWebServer.h"
 #include "src/LEDDisplay.h"
+#include "src/EmailService.h"
 #include "config.h"  // must come after Types.h
 
 // ─── System clock ─────────────────────────────────────────────────────────────
@@ -46,6 +47,7 @@ static ScheduleEngine  engine(nobo, calendar, weather);
 static AppWebServer    webServer(engine, weather, nobo, calendar);
 static LEDDisplay      led(engine, weather);
 static NVMConfig       nvm;
+static EmailService    emailService;
 
 // ─── Nobo post-connect profile setup ─────────────────────────────────────────
 static bool _noboProfilesEnsured = false;
@@ -155,6 +157,22 @@ void setup() {
     weather.begin(nvmOr(nvm.weatherCity, WEATHER_CITY), WEATHER_API_KEY);
     nobo.begin(nvmOr(nvm.noboIp, NOBO_HUB_IP), nvmOr(nvm.noboSerial, NOBO_HUB_SERIAL));
 
+    // Apply compile-time Resend defaults to in-memory NVM where not already set via GUI
+#ifdef RESEND_API_KEY
+    if (!nvm.resendKey[0])  strncpy(nvm.resendKey,  RESEND_API_KEY,   sizeof(nvm.resendKey)  - 1);
+#endif
+#ifdef RESEND_FROM
+    if (!nvm.resendFrom[0]) strncpy(nvm.resendFrom, RESEND_FROM,      sizeof(nvm.resendFrom) - 1);
+#endif
+#ifdef RESEND_TO
+    if (!nvm.resendTo[0])   strncpy(nvm.resendTo,   RESEND_TO,        sizeof(nvm.resendTo)   - 1);
+#endif
+#ifdef EMAIL_DAILY_TIME
+    if (!nvm.emailTime[0])  strncpy(nvm.emailTime,  EMAIL_DAILY_TIME, sizeof(nvm.emailTime)  - 1);
+#endif
+
+    emailService.begin(nvm, engine, calendar);
+
     Serial.println(F("NoboGoogleCal ready."));
 }
 
@@ -169,5 +187,6 @@ void loop() {
     calendar.tick();
     weather.tick();
     nobo.tick();
+    emailService.tick();
     ensureNoboProfiles();
 }
