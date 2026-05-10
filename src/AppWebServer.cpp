@@ -46,9 +46,10 @@ header h1{font-size:1.1rem;font-weight:600;color:#a78bfa;letter-spacing:.05em}
 .timeline{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
 .day-col{display:flex;flex-direction:column;gap:2px}
 .day-label{font-size:.6rem;color:#64748b;text-align:center;margin-bottom:2px}
-.day-block{height:8px;border-radius:2px;background:#2d3748}
-.day-block.comfort{background:#ea580c}
-.day-block.active{background:#fb923c;border:2px solid #f97316;box-shadow:0 0 4px #fb923c80}
+.day-hours{display:flex;height:8px;border-radius:2px;overflow:hidden}
+.h-eco{flex:1;background:#15803d}
+.h-comfort{flex:1;background:#dc2626}
+.h-active{flex:1;background:#ef4444;box-shadow:inset 0 0 3px rgba(255,255,255,.25)}
 footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .settings-btn{background:#4c1d95;color:#c4b5fd;border:none;padding:.5rem 1rem;border-radius:.5rem;cursor:pointer;font-size:.82rem;font-weight:600}
 .settings-btn:hover{background:#5b21b6}
@@ -451,21 +452,9 @@ void AppWebServer::_printZoneTimeline(WiFiClient& client, int zoneIndex) {
 
     client.print(F("<div class=\"timeline\">"));
     for (int d = 0; d < 7; d++) {
-        time_t dayStart = today + (time_t)d * 86400L;
-        time_t dayEnd   = dayStart + 86400L;
+        time_t dayStart      = today + (time_t)d * 86400L;
         time_t localDayStart = dayStart + (time_t)localOff;
-        struct tm dTm = *gmtime(&localDayStart);
-
-        bool hasEvent  = false;
-        bool activeNow = false;
-        for (int e = 0; e < MAX_EVENTS_PER_ZONE * MAX_ZONES; e++) {
-            const CalEvent& ev = _cal.events()[e];
-            if (!ev.valid || ev.zoneIndex != (uint8_t)zoneIndex) continue;
-            if (ev.start < dayEnd && ev.end > dayStart) {
-                hasEvent = true;
-                if (ev.start <= now && ev.end > now) activeNow = true;
-            }
-        }
+        struct tm dTm        = *gmtime(&localDayStart);
 
         char dateBuf[6];
         snprintf(dateBuf, sizeof(dateBuf), "%02d.%02d", dTm.tm_mday, dTm.tm_mon + 1);
@@ -473,10 +462,26 @@ void AppWebServer::_printZoneTimeline(WiFiClient& client, int zoneIndex) {
         client.print(dn[dTm.tm_wday]);
         client.print(F("<br>"));
         client.print(dateBuf);
-        client.print(F("</div><div class=\"day-block"));
-        if (activeNow)     client.print(F(" comfort active"));
-        else if (hasEvent) client.print(F(" comfort"));
-        client.print(F("\"></div></div>"));
+        client.print(F("</div><div class=\"day-hours\">"));
+
+        for (int h = 0; h < 24; h++) {
+            time_t hStart = dayStart + (time_t)h * 3600L;
+            time_t hEnd   = hStart + 3600L;
+
+            bool comfort  = false;
+            bool isNow    = (now >= hStart && now < hEnd);
+            for (int e = 0; e < MAX_EVENTS_PER_ZONE * MAX_ZONES; e++) {
+                const CalEvent& ev = _cal.events()[e];
+                if (!ev.valid || ev.zoneIndex != (uint8_t)zoneIndex) continue;
+                if (ev.start < hEnd && ev.end > hStart) { comfort = true; break; }
+            }
+
+            if (comfort && isNow)  client.print(F("<div class=\"h-active\"></div>"));
+            else if (comfort)      client.print(F("<div class=\"h-comfort\"></div>"));
+            else                   client.print(F("<div class=\"h-eco\"></div>"));
+        }
+
+        client.print(F("</div></div>"));
     }
     client.print(F("</div>"));
 }
