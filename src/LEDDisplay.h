@@ -3,7 +3,9 @@
 #include <WiFiS3.h>
 
 #define LED_SCROLL_STEP_MS   60UL
-#define LED_SCROLL_MAX_COLS  200
+// hostname(31) + ".local "(7) + IP max "255.255.255.255"(15) + trailing "  "(2) = 55 chars
+// 6 px per char (5 glyph + 1 gap) + 12 px blank tail so text scrolls fully off
+#define LED_SCROLL_MAX_COLS  ((31 + 7 + 15 + 2) * 6 + 12)
 
 class LEDDisplay {
 public:
