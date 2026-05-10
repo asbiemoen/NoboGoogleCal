@@ -99,8 +99,10 @@ bool WeatherService::_fetch() {
         int dOff        = norwayOffsetSeconds(&dUtc);
         time_t localDt  = dt + (time_t)dOff;
         struct tm lDt   = *gmtime(&localDt);
-        if (lDt.tm_mday == lNow.tm_mday && lDt.tm_mon  == lNow.tm_mon
-                                        && lDt.tm_year == lNow.tm_year) {
+        bool sameDay = (lDt.tm_mday == lNow.tm_mday && lDt.tm_mon  == lNow.tm_mon
+                                                    && lDt.tm_year == lNow.tm_year);
+        bool daytime = (lDt.tm_hour >= 6 && lDt.tm_hour < 18);
+        if (sameDay && daytime) {
             sum += t;
             count++;
         }
@@ -112,11 +114,11 @@ bool WeatherService::_fetch() {
 
     serialTs(); Serial.print(F("[Weather] "));
     Serial.print(_city);
-    Serial.print(F(": daily avg "));
+    Serial.print(F(": daytime avg "));
     Serial.print(_currentTemp);
     Serial.print(F("C ("));
     Serial.print(count);
-    Serial.print(F(" slots) — comfort "));
+    Serial.print(F(" slots 06-18) — comfort "));
     Serial.println(_comfortAllowed ? F("allowed") : F("suppressed"));
 
     char msg[APP_LOG_WIDTH];

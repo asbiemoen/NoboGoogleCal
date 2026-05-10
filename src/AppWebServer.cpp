@@ -319,7 +319,7 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
         client.print(F("<div class=\"temp\">&#x1F321; "));
         client.print(tempBuf);
         client.print(F(" &deg;C</div>"));
-        client.print(F("<div class=\"temp-sub\">daily avg</div>"));
+        client.print(F("<div class=\"temp-sub\">daytime avg</div>"));
         client.print(F("</div>"));
     } else {
         client.print(F("<div class=\"temp-na\">-- &deg;C</div>"));
@@ -331,7 +331,7 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
         if (comma) client.write(cityFull, comma - cityFull);
         else       client.print(cityFull);
     }
-    client.print(F("<br>Daily avg outdoor temperature"));
+    client.print(F("<br>Daytime avg outdoor temperature (06:00&ndash;18:00)"));
     if (!weatherOk) {
         client.print(F("<br><span style=\"color:#f87171\">Data unavailable &mdash; seasonal fallback</span>"));
     }
