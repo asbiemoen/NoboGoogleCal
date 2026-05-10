@@ -10,7 +10,3 @@
 // #define SECRET_SSID2 "backup-wifi-ssid"
 // #define SECRET_PASS2 "backup-wifi-password"
 
-// ─── Arduino Cloud ────────────────────────────────────────────────────────────
-// Device ID from create.arduino.cc/iot/devices
-// Secret Key is stored in board NVM during provisioning — not needed here
-#define SECRET_DEVICE_ID  "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
