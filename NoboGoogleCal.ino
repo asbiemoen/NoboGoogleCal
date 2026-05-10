@@ -57,9 +57,10 @@ static void ensureNoboProfiles() {
 }
 
 // ─── WiFi ─────────────────────────────────────────────────────────────────────
-static bool connectWifi() {
-    Serial.print(F("Connecting to WiFi"));
-    WiFi.begin(SECRET_SSID, SECRET_PASS);
+static bool _tryWifi(const char* ssid, const char* pass) {
+    Serial.print(F("Connecting to "));
+    Serial.print(ssid);
+    WiFi.begin(ssid, pass);
     for (uint8_t i = 0; i < 40; i++) {
         if (WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0)) break;
         delay(500);
@@ -68,11 +69,21 @@ static bool connectWifi() {
     Serial.println();
     if (WiFi.status() != WL_CONNECTED || WiFi.localIP() == IPAddress(0, 0, 0, 0)) {
         Serial.println(F("WiFi connect failed"));
+        WiFi.disconnect();
         return false;
     }
     Serial.print(F("IP: "));
     Serial.println(WiFi.localIP());
     return true;
+}
+
+static bool connectWifi() {
+    if (_tryWifi(SECRET_SSID, SECRET_PASS)) return true;
+#ifdef SECRET_SSID2
+    Serial.println(F("Trying secondary WiFi"));
+    if (_tryWifi(SECRET_SSID2, SECRET_PASS2)) return true;
+#endif
+    return false;
 }
 
 // ─── setup / loop ─────────────────────────────────────────────────────────────

@@ -288,6 +288,14 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
         client.print(lastSync);
         client.print(F("</span>"));
     }
+    {
+        IPAddress ip = WiFi.localIP();
+        char ipBuf[16];
+        snprintf(ipBuf, sizeof(ipBuf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+        client.print(F("<span class=\"badge badge-info\">"));
+        client.print(ipBuf);
+        client.print(F("</span>"));
+    }
     client.print(F("<button class=\"settings-btn\" id=\"loginBtn\" onclick=\"openLogin()\">&#128274; Login</button>"));
     client.print(F("<button class=\"settings-btn\" id=\"settingsBtn\" style=\"display:none\" onclick=\"openSettings()\">&#9881; Settings</button>"));
     client.print(F("</div></header>"));
