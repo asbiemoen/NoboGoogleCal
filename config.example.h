@@ -9,7 +9,6 @@
 
 // ─── Web interface ────────────────────────────────────────────────────────────
 #define WEB_PASSWORD  "password"       // Password for the settings page
-#define SITE_TITLE    "Heating Controller"  // Displayed in browser tab and page header
 #define MDNS_NAME     "heat"           // Board reachable at heat.local on the local network
 
 // ─── Weather (OpenWeatherMap) ─────────────────────────────────────────────────
