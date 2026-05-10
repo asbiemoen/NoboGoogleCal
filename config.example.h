@@ -15,6 +15,15 @@
 #define WEATHER_CITY    "Oslo"         // Nearest city for weather lookup
 #define WEATHER_API_KEY "your-api-key" // Free key from openweathermap.org
 
+// ─── Email notifications (Resend.com) ────────────────────────────────────────
+// All fields are optional compile-time defaults; they can be overridden at
+// runtime via the Settings page without reflashing.
+// Sign up for a free API key at resend.com (100 emails/day free tier).
+// #define RESEND_API_KEY   "re_..."
+// #define RESEND_FROM      "noreply@yourdomain.com"
+// #define RESEND_TO        "you@example.com"
+// #define EMAIL_DAILY_TIME "07:00"   // HH:MM Norway local time
+
 // ─── Zone configuration ───────────────────────────────────────────────────────
 // One entry per heating zone. Each zone maps to one Nobø weekly program
 // and one Google Calendar ICS feed.
