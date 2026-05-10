@@ -1,4 +1,5 @@
 #include "MiniMDNS.h"
+#include "AppLog.h"
 #include <Arduino.h>
 #include <string.h>
 #include <ctype.h>
@@ -59,5 +60,10 @@ void MiniMDNS::_announce() {
     WiFiUDP udp;
     udp.beginPacket(MDNS_ADDR, MDNS_PORT);
     udp.write(resp, pos);
-    udp.endPacket();
+    int ok = udp.endPacket();
+    serialTs(); Serial.print(F("[mDNS] Announced "));
+    Serial.print(_hostname);
+    Serial.print(F(".local -> "));
+    Serial.print(myIp);
+    Serial.println(ok ? F(" OK") : F(" FAIL"));
 }

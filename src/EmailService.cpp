@@ -135,12 +135,12 @@ bool EmailService::_send() {
     http.stop();
 
     if (code == 200 || code == 201) {
-        Serial.println(F("[Email] Daily summary sent"));
+        serialTs(); Serial.println(F("[Email] Daily summary sent"));
         AppLog::add("Email: daily summary sent");
         return true;
     }
 
-    Serial.print(F("[Email] HTTP error: "));
+    serialTs(); Serial.print(F("[Email] HTTP error: "));
     Serial.println(code);
     char msg[APP_LOG_WIDTH];
     snprintf(msg, sizeof(msg), "Email: send failed (HTTP %d)", code);

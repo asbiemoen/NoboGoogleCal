@@ -39,7 +39,7 @@ bool WeatherService::_fetch() {
 
     int err = http.get(path);
     if (err != 0) {
-        Serial.println(F("[Weather] HTTP GET failed"));
+        serialTs(); Serial.println(F("[Weather] HTTP GET failed"));
         _available      = false;
         _comfortAllowed = !_summerFallback();
         AppLog::add("Weather: fetch failed");
@@ -48,7 +48,7 @@ bool WeatherService::_fetch() {
 
     int code = http.responseStatusCode();
     if (code != 200) {
-        Serial.print(F("[Weather] HTTP status: "));
+        serialTs(); Serial.print(F("[Weather] HTTP status: "));
         Serial.println(code);
         http.stop();
         _available      = false;
@@ -68,7 +68,7 @@ bool WeatherService::_fetch() {
                                                 DeserializationOption::Filter(filter));
     http.stop();
     if (jerr) {
-        Serial.print(F("[Weather] JSON error: "));
+        serialTs(); Serial.print(F("[Weather] JSON error: "));
         Serial.println(jerr.c_str());
         _available      = false;
         _comfortAllowed = !_summerFallback();
@@ -110,7 +110,7 @@ bool WeatherService::_fetch() {
     _available      = gotFirst;
     _comfortAllowed = (_currentTemp <= 10.0f);
 
-    Serial.print(F("[Weather] "));
+    serialTs(); Serial.print(F("[Weather] "));
     Serial.print(_city);
     Serial.print(F(": daily avg "));
     Serial.print(_currentTemp);

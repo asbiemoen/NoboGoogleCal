@@ -75,7 +75,7 @@ void CalendarManager::tick() {
 }
 
 void CalendarManager::_syncZone(int zoneIndex) {
-    Serial.print(F("[Cal] Syncing zone "));
+    serialTs(); Serial.print(F("[Cal] Syncing zone "));
     Serial.println(_zones[zoneIndex].name);
 
     for (int i = 0; i < MAX_EVENTS_PER_ZONE * MAX_ZONES; i++) {
@@ -92,7 +92,7 @@ void CalendarManager::_syncZone(int zoneIndex) {
         _eventCount++;
         if (_events[i].zoneIndex == (uint8_t)zoneIndex) zoneEvCount++;
     }
-    Serial.print(F("[Cal] Total valid events: "));
+    serialTs(); Serial.print(F("[Cal] Total valid events: "));
     Serial.println(_eventCount);
 
     char msg[APP_LOG_WIDTH];
@@ -124,7 +124,7 @@ bool CalendarManager::_fetchIcs(const char* url, int zoneIndex) {
 
     int err = http.get(pathStart);
     if (err != 0) {
-        Serial.print(F("[Cal] TCP/SSL error: "));
+        serialTs(); Serial.print(F("[Cal] TCP/SSL error: "));
         Serial.println(err);
         char msg[APP_LOG_WIDTH];
         snprintf(msg, sizeof(msg), "Cal Z%d: TCP err %d", zoneIndex + 1, err);
@@ -134,7 +134,7 @@ bool CalendarManager::_fetchIcs(const char* url, int zoneIndex) {
 
     int statusCode = http.responseStatusCode();
     if (statusCode != 200) {
-        Serial.print(F("[Cal] HTTP status: "));
+        serialTs(); Serial.print(F("[Cal] HTTP status: "));
         Serial.println(statusCode);
         http.stop();
         char msg[APP_LOG_WIDTH];
@@ -178,7 +178,7 @@ bool CalendarManager::_fetchIcs(const char* url, int zoneIndex) {
 
     http.stop();
     if (timeout) {
-        Serial.println(F("[Cal] Fetch timed out"));
+        serialTs(); Serial.println(F("[Cal] Fetch timed out"));
         char msg[APP_LOG_WIDTH];
         snprintf(msg, sizeof(msg), "Cal Z%d: timeout", zoneIndex + 1);
         AppLog::add(msg);
@@ -379,7 +379,7 @@ void CalendarManager::_saveToEeprom() {
     EEPROM.write(1, EEPROM_MAGIC_1);
     EEPROM.put(2, count);
 
-    Serial.print(F("[Cal] EEPROM: saved "));
+    serialTs(); Serial.print(F("[Cal] EEPROM: saved "));
     Serial.print(count);
     Serial.println(F(" events"));
     char msg[APP_LOG_WIDTH];
@@ -416,7 +416,7 @@ void CalendarManager::_loadFromEeprom() {
     }
 
     if (loaded > 0) {
-        Serial.print(F("[Cal] EEPROM: loaded "));
+        serialTs(); Serial.print(F("[Cal] EEPROM: loaded "));
         Serial.print(loaded);
         Serial.println(F(" events"));
         char msg[APP_LOG_WIDTH];
@@ -426,7 +426,7 @@ void CalendarManager::_loadFromEeprom() {
 }
 
 void CalendarManager::forceSyncAll() {
-    Serial.println(F("[Cal] Force sync all zones"));
+    serialTs(); Serial.println(F("[Cal] Force sync all zones"));
     for (int i = 0; i < _zoneCount; i++) {
         _syncZone(i);
     }

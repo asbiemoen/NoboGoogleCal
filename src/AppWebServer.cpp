@@ -128,7 +128,7 @@ void AppWebServer::begin(const char* pw, NVMConfig& nvm) {
     strncpy(_password, pw, sizeof(_password) - 1);
     _server.begin();
     _started = true;
-    Serial.println(F("[Web] Server started on port 80"));
+    serialTs(); Serial.println(F("[Web] Server started on port 80"));
 }
 
 // ─── tick ─────────────────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ void AppWebServer::begin(const char* pw, NVMConfig& nvm) {
 void AppWebServer::tick() {
     if (!_started) return;
     if (_rebootPending) {
-        Serial.println(F("[Web] Rebooting to apply settings..."));
+        serialTs(); Serial.println(F("[Web] Rebooting to apply settings..."));
         delay(500);
         NVIC_SystemReset();
     }
@@ -717,7 +717,7 @@ void AppWebServer::_serveSettings(WiFiClient& client, const char* body, int len)
                 strncpy(combined, newCity, sizeof(combined) - 1);
             _weather.setCity(combined);
             strncpy(_nvm->weatherCity, combined, sizeof(_nvm->weatherCity) - 1);
-            Serial.print(F("[Web] Weather city -> "));
+            serialTs(); Serial.print(F("[Web] Weather city -> "));
             Serial.println(combined);
         }
 

@@ -15,6 +15,7 @@
 #include "src/LEDDisplay.h"
 #include "src/EmailService.h"
 #include "src/MiniMDNS.h"
+#include "src/AppLog.h"
 #include "config.h"  // must come after Types.h
 
 // ─── System clock ─────────────────────────────────────────────────────────────
@@ -64,7 +65,7 @@ static void ensureNoboProfiles() {
 
 // ─── WiFi ─────────────────────────────────────────────────────────────────────
 static bool _tryWifi(const char* ssid, const char* pass) {
-    Serial.print(F("Connecting to "));
+    serialTs(); Serial.print(F("Connecting to "));
     Serial.print(ssid);
     WiFi.begin(ssid, pass);
     for (uint8_t i = 0; i < 40; i++) {
@@ -74,11 +75,11 @@ static bool _tryWifi(const char* ssid, const char* pass) {
     }
     Serial.println();
     if (WiFi.status() != WL_CONNECTED || WiFi.localIP() == IPAddress(0, 0, 0, 0)) {
-        Serial.println(F("WiFi connect failed"));
+        serialTs(); Serial.println(F("WiFi connect failed"));
         WiFi.disconnect();
         return false;
     }
-    Serial.print(F("IP: "));
+    serialTs(); Serial.print(F("IP: "));
     Serial.println(WiFi.localIP());
     return true;
 }
@@ -96,7 +97,7 @@ static bool connectWifi() {
     if (!ssid2) { ssid2 = SECRET_SSID2; pass2 = SECRET_PASS2; }
 #endif
     if (ssid2) {
-        Serial.println(F("Trying secondary WiFi"));
+        serialTs(); Serial.println(F("Trying secondary WiFi"));
         if (_tryWifi(ssid2, pass2 ? pass2 : "")) return true;
     }
     return false;
@@ -116,7 +117,7 @@ void setup() {
     ntp.begin();
 
     // Retry until we get a valid epoch (> 2020-01-01). closes #41
-    Serial.print(F("NTP sync"));
+    serialTs(); Serial.print(F("NTP sync"));
     time_t epoch = 0;
     for (int i = 0; i < 20 && epoch < 1577836800UL; i++) {
         if (ntp.forceUpdate()) epoch = (time_t)ntp.getEpochTime();
@@ -154,7 +155,7 @@ void setup() {
     {
         const char* hostname = nvmOr(nvm.mdnsName, MDNS_NAME);
         mdns.begin(hostname);
-        Serial.print(F("mDNS: "));
+        serialTs(); Serial.print(F("mDNS: "));
         Serial.print(hostname);
         Serial.println(F(".local"));
     }
@@ -183,7 +184,7 @@ void setup() {
 
     emailService.begin(nvm, engine, calendar);
 
-    Serial.println(F("NoboGoogleCal ready."));
+    serialTs(); Serial.println(F("NoboGoogleCal ready."));
 }
 
 void loop() {

@@ -1,4 +1,5 @@
 #include "LEDDisplay.h"
+#include "AppLog.h"
 #include <Arduino.h>
 #include <string.h>
 #include <stdio.h>
@@ -79,7 +80,7 @@ LEDDisplay::LEDDisplay(ScheduleEngine& e, WeatherService& w)
 void LEDDisplay::begin() {
     _matrix.begin();
     _bootMs = millis();
-    Serial.println(F("[LED] Matrix initialised"));
+    serialTs(); Serial.println(F("[LED] Matrix initialised"));
 }
 
 void LEDDisplay::tick() {

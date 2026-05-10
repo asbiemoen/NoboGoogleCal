@@ -34,7 +34,7 @@ void NoboController::tick() {
         uint32_t now = millis();
         if (_lastReconnectAttempt == 0 || now - _lastReconnectAttempt > 30000UL) {
             _lastReconnectAttempt = now;
-            Serial.print(F("[Nobo] Connecting to "));
+            serialTs(); Serial.print(F("[Nobo] Connecting to "));
             Serial.println(_ip);
             _connect();
         }
@@ -56,7 +56,7 @@ void NoboController::tick() {
     }
 
     if (!_client.connected()) {
-        Serial.println(F("[Nobo] Connection lost"));
+        serialTs(); Serial.println(F("[Nobo] Connection lost"));
         _disconnect();
     }
 }
@@ -91,7 +91,7 @@ bool NoboController::ensureProfileExists(const char* name) {
         strncpy(_profiles[_profileCount].name, name, sizeof(_profiles[0].name) - 1);
         _profileCount++;
     }
-    Serial.print(F("[Nobo] Created profile: "));
+    serialTs(); Serial.print(F("[Nobo] Created profile: "));
     Serial.println(name);
     return true;
 }
@@ -168,7 +168,7 @@ bool NoboController::_connect() {
     _connected = false;
 
     if (!_client.connect(_ip, NOBO_PORT)) {
-        Serial.println(F("[Nobo] TCP connect failed"));
+        serialTs(); Serial.println(F("[Nobo] TCP connect failed"));
         AppLog::add("Nobø: connect failed");
         return false;
     }
@@ -184,24 +184,24 @@ bool NoboController::_connect() {
 
     char resp[128];
     if (!_readLine(resp, sizeof(resp), 8000)) {
-        Serial.println(F("[Nobo] Handshake timeout"));
+        serialTs(); Serial.println(F("[Nobo] Handshake timeout"));
         _client.stop();
         return false;
     }
     if (strncmp(resp, "HELLO", 5) != 0) {
-        Serial.println(F("[Nobo] Unexpected handshake response"));
+        serialTs(); Serial.println(F("[Nobo] Unexpected handshake response"));
         _client.stop();
         return false;
     }
 
-    Serial.println(F("[Nobo] Connected, loading data..."));
+    serialTs(); Serial.println(F("[Nobo] Connected, loading data..."));
     AppLog::add("Nobø: connected");
     _connected      = true;
     _lastKeepAlive  = millis();
 
     // Hub sends full data snapshot after handshake
     if (!_readAllData()) {
-        Serial.println(F("[Nobo] Failed to read initial data"));
+        serialTs(); Serial.println(F("[Nobo] Failed to read initial data"));
     }
 
     // Start override IDs beyond any the hub already knows about

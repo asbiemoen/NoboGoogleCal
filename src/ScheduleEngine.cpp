@@ -1,4 +1,5 @@
 #include "ScheduleEngine.h"
+#include "AppLog.h"
 #include <Arduino.h>
 #include <stdio.h>
 #include <string.h>
@@ -133,7 +134,7 @@ void ScheduleEngine::_evaluateZone(int i) {
         if (_nobo.setZoneComfort(zoneId, time(nullptr), comfortUntil, newId)) {
             _states[i].overrideId = newId;
             _states[i].current    = STATUS_COMFORT;
-            Serial.print(F("[Engine] Zone COMFORT: "));
+            serialTs(); Serial.print(F("[Engine] Zone COMFORT: "));
             Serial.println(_zones[i].name);
         }
     } else {
@@ -143,7 +144,7 @@ void ScheduleEngine::_evaluateZone(int i) {
             _states[i].overrideId = -1;
         }
         _states[i].current = desired;
-        Serial.print(F("[Engine] Zone reset to "));
+        serialTs(); Serial.print(F("[Engine] Zone reset to "));
         Serial.print(statusName(desired));
         Serial.print(F(": "));
         Serial.println(_zones[i].name);
@@ -160,7 +161,7 @@ void ScheduleEngine::setOverride(int zone, float hours) {
     _overrides[zone].active  = true;
     _overrides[zone].until   = time(nullptr) + (time_t)(hours * 3600.0f + 0.5f);
     _overrides[zone].isBoost = (_states[zone].current != STATUS_COMFORT);
-    Serial.print(F("[Engine] Override zone "));
+    serialTs(); Serial.print(F("[Engine] Override zone "));
     Serial.print(_zones[zone].name);
     Serial.println(_overrides[zone].isBoost ? F(" BOOST") : F(" MUTE"));
     _evaluateZone(zone);
