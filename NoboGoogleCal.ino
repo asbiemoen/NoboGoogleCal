@@ -1,6 +1,6 @@
 #include <time.h>      // must precede RTC.h — fully defines struct tm before wchar.h sees it
 #include <WiFiS3.h>
-#include <WiFiMDNS.h>
+#include <ArduinoMDNS.h>
 #include <RTC.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
@@ -36,9 +36,11 @@ extern "C" int _gettimeofday(struct timeval* tv, void*) {
     return 0;
 }
 
-// ─── NTP ──────────────────────────────────────────────────────────────────────
-static WiFiUDP   ntpUdp;
-static NTPClient ntp(ntpUdp, "pool.ntp.org", 0);  // UTC only; display code applies Norway offset
+// ─── NTP + mDNS ───────────────────────────────────────────────────────────────
+static WiFiUDP      ntpUdp;
+static NTPClient    ntp(ntpUdp, "pool.ntp.org", 0);  // UTC only; display code applies Norway offset
+static WiFiUDP      mdnsUdp;
+static MDNSResponder mdns(mdnsUdp);
 
 // ─── Components ───────────────────────────────────────────────────────────────
 static NoboController  nobo;
@@ -150,10 +152,13 @@ void setup() {
         Serial.println(tbuf);
     }
 
-    MDNS.begin(nvmOr(nvm.mdnsName, MDNS_NAME));
-    Serial.print(F("mDNS: "));
-    Serial.print(nvmOr(nvm.mdnsName, MDNS_NAME));
-    Serial.println(F(".local"));
+    {
+        const char* hostname = nvmOr(nvm.mdnsName, MDNS_NAME);
+        mdns.begin(WiFi.localIP(), hostname);
+        Serial.print(F("mDNS: "));
+        Serial.print(hostname);
+        Serial.println(F(".local"));
+    }
 
     engine.begin(ZONES, ZONE_COUNT);
     webServer.begin(nvmOr(nvm.webPassword, WEB_PASSWORD), nvm);
@@ -183,6 +188,7 @@ void setup() {
 }
 
 void loop() {
+    mdns.run();
     webServer.tick();
     led.tick();
     if (ntp.update()) {
