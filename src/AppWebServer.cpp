@@ -43,7 +43,8 @@ header h1{font-size:1.1rem;font-weight:600;color:#a78bfa;letter-spacing:.05em}
 .zone-body{padding:.75rem 1.25rem 1.25rem}
 .zone-next{font-size:.82rem;color:#94a3b8;margin-bottom:.75rem;line-height:1.5}
 .zone-next strong{color:#e2e8f0}
-.timeline{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.timeline-wrap{overflow-x:auto}
+.timeline{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;min-width:336px}
 .day-col{display:flex;flex-direction:column;gap:2px}
 .day-label{font-size:.6rem;color:#64748b;text-align:center;margin-bottom:2px}
 .day-hours{display:flex;height:8px;border-radius:2px;overflow:hidden}
@@ -88,6 +89,7 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .sync-bar{padding:.25rem 1.5rem .75rem;display:flex;align-items:center}
 .sync-pw{background:#0f1117;border:1px solid #2d3748;color:#e2e8f0;padding:.4rem .75rem;border-radius:.4rem;font-size:.82rem;margin-right:.5rem;width:140px}
 @media(max-width:480px){header{flex-wrap:wrap;gap:.5rem}}
+@media(max-width:400px){.ev-t{min-width:80px}.hero-zone-name{min-width:120px}}
 </style>
 </head>
 <body>
@@ -462,7 +464,7 @@ void AppWebServer::_printZoneTimeline(WiFiClient& client, int zoneIndex) {
 
     uint8_t preheatH = _engine.zonePreheatHours(zoneIndex);
 
-    client.print(F("<div class=\"timeline\">"));
+    client.print(F("<div class=\"timeline-wrap\"><div class=\"timeline\">"));
     for (int d = 0; d < 7; d++) {
         time_t dayStart      = today + (time_t)d * 86400L;
         time_t localDayStart = dayStart + (time_t)localOff;
@@ -503,7 +505,7 @@ void AppWebServer::_printZoneTimeline(WiFiClient& client, int zoneIndex) {
 
         client.print(F("</div></div>"));
     }
-    client.print(F("</div>"));
+    client.print(F("</div></div>"));
 }
 
 // ─── JSON status ──────────────────────────────────────────────────────────────
