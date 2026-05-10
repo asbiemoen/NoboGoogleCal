@@ -76,6 +76,7 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .hero-zone-name{font-weight:600;font-size:.88rem;color:#e2e8f0;min-width:160px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .hero-countdown{display:inline-block;margin-top:.5rem;font-size:.78rem;font-weight:600;color:#fb923c;background:#451a03;border-radius:.4rem;padding:.25rem .6rem}
 .zone-warn{font-size:.73rem;color:#f87171;padding:.2rem 1.25rem;background:#450a0a}
+.zone-sync{font-size:.73rem;color:#4ade80;padding:.2rem 1.25rem;background:#052e16}
 .section-title{font-size:.72rem;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:.08em;padding:0 1.5rem .4rem}
 .card{background:#1a1f2e;border:1px solid #4c1d95;border-radius:.75rem;padding:1.5rem}
 .card h2{font-size:1rem;font-weight:600;color:#a78bfa;margin-bottom:.75rem}
@@ -287,17 +288,6 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
 
     // Hero
     client.print(F("<div class=\"hero\">"));
-    time_t soonestChange = 0;
-    bool   soonestToComfort = false;
-    for (int i = 0; i < _engine.zoneCount(); i++) {
-        time_t changeAt; bool toComfort;
-        if (_engine.nextChangeForZone(i, 1800, changeAt, toComfort)) {
-            if (soonestChange == 0 || changeAt < soonestChange) {
-                soonestChange    = changeAt;
-                soonestToComfort = toComfort;
-            }
-        }
-    }
     for (int i = 0; i < _engine.zoneCount(); i++) {
         const char* statusStr = statusName(_engine.zoneStatus(i));
         client.print(F("<div class=\"hero-row\">"));
@@ -309,17 +299,9 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
         client.print(statusStr);
         client.print(F("</span></div>"));
     }
-    if (soonestChange > 0) {
-        int minsLeft = (int)((soonestChange - now) / 60);
-        if (minsLeft < 1) minsLeft = 1;
-        char countBuf[48];
-        snprintf(countBuf, sizeof(countBuf),
-                 soonestToComfort ? "&#9889; Heating starts in %d min" : "&#9889; Heating ends in %d min",
-                 minsLeft);
-        client.print(F("<div class=\"hero-countdown\">"));
-        client.print(countBuf);
-        client.print(F("</div>"));
-    }
+    client.print(F("<div class=\"hero-countdown\">&#x23F2; "));
+    client.print(_engine.nextEventString());
+    client.print(F("</div>"));
     client.print(F("</div>"));
 
     // Weather card
@@ -362,6 +344,7 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
     client.print(F("</span></div></div>"));
 
     // Zone cards
+    client.print(F("<p class=\"section-title\">Weekly schedule</p>"));
     client.print(F("<div class=\"zones\">"));
     for (int i = 0; i < _engine.zoneCount(); i++) {
         const char* statusStr = statusName(_engine.zoneStatus(i));
@@ -373,8 +356,13 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
         client.print(F("\">"));
         client.print(statusStr);
         client.print(F("</span></div>"));
-        if (noboOk && _engine.zoneNoboId(i) < 0) {
-            client.print(F("<div class=\"zone-warn\">&#9888; Zone not found in Nob&oslash; hub</div>"));
+        if (noboOk) {
+            int noboId = _engine.zoneNoboId(i);
+            if (noboId >= 0) {
+                client.print(F("<div class=\"zone-sync\">&#10003; Synced with Nob&oslash;</div>"));
+            } else {
+                client.print(F("<div class=\"zone-warn\">&#9888; Zone not found in Nob&oslash; hub</div>"));
+            }
         }
         client.print(F("<div class=\"zone-body\">"));
         _printZoneEvents(client, i, !noboOk);
