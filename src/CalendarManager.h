@@ -13,6 +13,9 @@ public:
     const CalEvent* events()      const { return _events; }
     int             eventCount()  const { return _eventCount; }
     const char*     lastSyncTime()const { return _lastSync; }
+    bool            isSyncing(int zoneIndex) const {
+        return (zoneIndex >= 0 && zoneIndex < MAX_ZONES) ? _syncing[zoneIndex] : false;
+    }
 
 private:
     const ZoneConfig* _zones;
@@ -25,6 +28,7 @@ private:
     int      _nextZoneToSync;  // staggered fetch: one zone per minute
     uint32_t _lastSyncPeriod[MAX_ZONES];
     uint32_t _lastEepromSaveDay;
+    bool     _syncing[MAX_ZONES];
 
     void _syncZone(int zoneIndex);
     bool _fetchIcs(const char* url, int zoneIndex);

@@ -36,7 +36,7 @@ void CalendarManager::begin(const ZoneConfig* zones, int zoneCount) {
     _lastSync[0]        = '\0';
     _lastEepromSaveDay  = 0;
 
-    for (int i = 0; i < MAX_ZONES; i++) _lastSyncPeriod[i] = 0xFFFFFFFFUL;
+    for (int i = 0; i < MAX_ZONES; i++) { _lastSyncPeriod[i] = 0xFFFFFFFFUL; _syncing[i] = false; }
 
     for (int i = 0; i < MAX_EVENTS_PER_ZONE * MAX_ZONES; i++) {
         _events[i].valid = false;
@@ -75,8 +75,12 @@ void CalendarManager::tick() {
 }
 
 void CalendarManager::_syncZone(int zoneIndex) {
+    _syncing[zoneIndex] = true;
     serialTs(); Serial.print(F("[Cal] Syncing zone "));
     Serial.println(_zones[zoneIndex].name);
+    char startMsg[APP_LOG_WIDTH];
+    snprintf(startMsg, sizeof(startMsg), "Cal Z%d: syncing...", zoneIndex + 1);
+    AppLog::add(startMsg);
 
     for (int i = 0; i < MAX_EVENTS_PER_ZONE * MAX_ZONES; i++) {
         if (_events[i].valid && _events[i].zoneIndex == (uint8_t)zoneIndex)
@@ -108,6 +112,7 @@ void CalendarManager::_syncZone(int zoneIndex) {
         }
     }
     // failure already logged by _fetchIcs with specific reason
+    _syncing[zoneIndex] = false;
 }
 
 bool CalendarManager::_fetchIcs(const char* url, int zoneIndex) {

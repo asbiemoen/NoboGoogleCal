@@ -81,6 +81,8 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .hero-countdown{display:inline-block;margin-top:.5rem;font-size:.78rem;font-weight:600;color:#fb923c;background:#431407;border-radius:.4rem;padding:.25rem .6rem}
 .zone-warn{font-size:.73rem;color:#f87171;padding:.2rem 1.25rem;background:#450a0a}
 .zone-sync{font-size:.73rem;color:#4ade80;padding:.2rem 1.25rem;background:#052e16}
+.zone-syncing{opacity:.35;pointer-events:none}
+.zone-syncing-banner{font-size:.73rem;color:#fb923c;padding:.2rem 1.25rem;background:#431407}
 .section-title{font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.1em;padding:0 1.5rem .5rem}
 .card{background:#161b27;border:1px solid #374151;border-radius:.75rem;padding:1.5rem}
 .card h2{font-size:1rem;font-weight:700;color:#fb923c;margin-bottom:.75rem}
@@ -353,8 +355,10 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
     client.print(F("<div class=\"zones\">"));
     for (int i = 0; i < _engine.zoneCount(); i++) {
         const char* statusStr = statusName(_engine.zoneStatus(i));
+        bool syncing = _cal.isSyncing(i);
         client.print(F("<div class=\"zone zone-"));
         client.print(statusStr);
+        if (syncing) client.print(F(" zone-syncing"));
         client.print(F("\"><div class=\"zone-header\">"));
         client.print(F("<span class=\"zone-name\">"));
         client.print(_engine.zoneName(i));
@@ -363,7 +367,9 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
         client.print(F("\">"));
         client.print(statusStr);
         client.print(F("</span></div>"));
-        if (noboOk) {
+        if (syncing) {
+            client.print(F("<div class=\"zone-syncing-banner\">&#8635; Fetching calendar...</div>"));
+        } else if (noboOk) {
             int noboId = _engine.zoneNoboId(i);
             if (noboId >= 0) {
                 client.print(F("<div class=\"zone-sync\">&#10003; Synced with Nob&oslash;</div>"));
