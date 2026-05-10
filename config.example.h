@@ -21,15 +21,16 @@
 // Get the ICS URL from: Google Calendar → ⚙ Settings → Integrate calendar
 //                       → "Secret address in iCal format"
 //
-// ZoneConfig fields: { "Zone name", "ICS URL", preheat_hours, default_status }
-//   default_status : ECO | AWAY | NORMAL
+// ZoneConfig fields: { "Zone name", "ICS URL", preheat_hours, default_status, "Event label" }
+//   default_status : STATUS_ECO | STATUS_AWAY | STATUS_NORMAL
 //   preheat_hours  : hours before event start to switch to COMFORT
+//   event_label    : text shown when Google Calendar returns "Busy" (public calendar privacy setting)
 
 #define ZONE_COUNT 2
 
 // clang-format off
 const ZoneConfig ZONES[ZONE_COUNT] = {
-    { "TMS Hovedsal",         "https://calendar.google.com/calendar/ical/CALENDAR_ID/private-SECRET/basic.ics", 1, ECO },
-    { "TMS-RAST-Ungdomsrom",  "https://calendar.google.com/calendar/ical/CALENDAR_ID/private-SECRET/basic.ics", 1, ECO },
+    { "Main Hall",   "https://calendar.google.com/calendar/ical/CALENDAR_ID/public/basic.ics", 1, STATUS_ECO, "Church event" },
+    { "Youth Room",  "https://calendar.google.com/calendar/ical/CALENDAR_ID/public/basic.ics", 1, STATUS_ECO, "Youth event"  },
 };
 // clang-format on

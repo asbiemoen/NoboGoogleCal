@@ -19,6 +19,7 @@ public:
     }
     const char*   statusString()          const;
     const char*   nextEventString()       const;
+    const char*   zoneEventLabel(int i)   const;
 
     // Returns true if zone i has a comfort boundary within withinSecs seconds.
     // changeAt: epoch of the boundary. toComfort: true=turning on, false=turning off.

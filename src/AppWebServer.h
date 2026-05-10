@@ -24,7 +24,7 @@ private:
     bool             _started;
 
     void _handleClient(WiFiClient& client);
-    void _serveDashboard(WiFiClient& client);
+    void _serveDashboard(WiFiClient& client, bool syncing);
     void _serveStatus(WiFiClient& client);
     void _serveSettings(WiFiClient& client, const char* body, int bodyLen);
     void _serveSync(WiFiClient& client, const char* body, int bodyLen);

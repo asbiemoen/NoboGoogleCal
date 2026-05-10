@@ -13,7 +13,8 @@ static const char HTML_HEAD[] PROGMEM = R"html(<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="60">
-<title>NoboGoogleCal</title>
+<meta name="theme-color" content="#0f1117">
+<title>TMS Heating</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}
@@ -26,6 +27,7 @@ header h1{font-size:1.1rem;font-weight:600;color:#a78bfa;letter-spacing:.05em}
 .badge-info{background:#1e3a5f;color:#60a5fa}
 .weather{background:#1a1f2e;border:1px solid #2d3748;border-radius:.75rem;padding:1rem 1.5rem;margin:1.5rem;display:flex;align-items:center;gap:1rem}
 .weather .temp{font-size:2.5rem;font-weight:700;color:#f9a825}
+.weather .temp-na{font-size:2.5rem;font-weight:700;color:#4b5563}
 .weather .info{font-size:.85rem;color:#94a3b8;line-height:1.6}
 .weather .suppressed{color:#f87171;font-weight:600}
 .weather .allowed{color:#4ade80;font-weight:600}
@@ -46,7 +48,7 @@ header h1{font-size:1.1rem;font-weight:600;color:#a78bfa;letter-spacing:.05em}
 .day-label{font-size:.6rem;color:#64748b;text-align:center;margin-bottom:2px}
 .day-block{height:8px;border-radius:2px;background:#2d3748}
 .day-block.comfort{background:#ea580c}
-.day-block.active{background:#fb923c;box-shadow:0 0 4px #fb923c80}
+.day-block.active{background:#fb923c;border:2px solid #f97316;box-shadow:0 0 4px #fb923c80}
 footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .settings-btn{background:#4c1d95;color:#c4b5fd;border:none;padding:.5rem 1rem;border-radius:.5rem;cursor:pointer;font-size:.82rem;font-weight:600}
 .settings-btn:hover{background:#5b21b6}
@@ -59,7 +61,8 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .modal .actions{display:flex;gap:.75rem;margin-top:1.25rem;justify-content:flex-end}
 .btn-cancel{background:#374151;color:#d1d5db;border:none;padding:.5rem 1rem;border-radius:.4rem;cursor:pointer}
 .btn-save{background:#4c1d95;color:#c4b5fd;border:none;padding:.5rem 1rem;border-radius:.4rem;cursor:pointer;font-weight:600}
-.nobo-warn{background:#450a0a;border:1px solid #dc2626;color:#fca5a5;padding:.6rem 1.5rem;margin:0 1.5rem 1rem;border-radius:.5rem;font-size:.8rem}
+.nobo-warn{background:#450a0a;border-left:4px solid #dc2626;color:#fca5a5;padding:.6rem 1.5rem;font-size:.8rem}
+.syncing-banner{background:#052e16;border-left:4px solid #4ade80;color:#4ade80;padding:.5rem 1.5rem;font-size:.8rem}
 .badge-err{background:#450a0a;color:#fca5a5}
 .badge-pend{background:#451a03;color:#fde68a;padding:.15rem .4rem}
 .events{margin-bottom:.75rem}
@@ -71,9 +74,11 @@ footer{text-align:center;padding:1.5rem;color:#4a5568;font-size:.78rem}
 .log-row{color:#4b5563}
 .log-row:first-child{color:#9ca3af}
 .log-row-err{color:#f87171!important}
-.hero{background:#1a1f2e;border:1px solid #4c1d95;border-radius:.75rem;padding:.85rem 1.5rem;margin:1.5rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.4rem}
-.hero-status{font-size:.95rem;font-weight:600;color:#e2e8f0}
-.hero-next{font-size:.8rem;color:#a78bfa}
+.hero{background:#1a1f2e;border:1px solid #4c1d95;border-radius:.75rem;padding:.85rem 1.5rem;margin:1.5rem}
+.hero-row{display:flex;align-items:center;gap:.75rem;padding:.15rem 0}
+.hero-zone-name{font-weight:600;font-size:.88rem;color:#e2e8f0;min-width:160px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.hero-next{font-size:.78rem;color:#a78bfa;flex:1}
+.hero-countdown{display:inline-block;margin-top:.5rem;font-size:.78rem;font-weight:600;color:#fb923c;background:#451a03;border-radius:.4rem;padding:.25rem .6rem}
 .zone-warn{font-size:.73rem;color:#f87171;padding:.2rem 1.25rem;background:#450a0a}
 .section-title{font-size:.72rem;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:.08em;padding:0 1.5rem .4rem}
 .sync-bar{padding:.25rem 1.5rem .75rem;display:flex;align-items:center}
@@ -92,7 +97,7 @@ static const char HTML_FOOT[] PROGMEM = R"html(
 <label>Password to unlock settings</label>
 <input type="password" name="auth" placeholder="Enter password" required>
 <label>New web password (leave blank to keep current)</label>
-<input type="text" name="new_password" autocomplete="new-password">
+<input type="password" name="new_password" autocomplete="new-password">
 <label>Weather city</label>
 <input type="text" name="weather_city" placeholder="Oslo">
 <div class="actions">
@@ -154,7 +159,7 @@ void AppWebServer::_handleClient(WiFiClient& client) {
     reqLine[pos] = '\0';
     isPost = (strncmp(reqLine, "POST", 4) == 0);
 
-    // Read headers (look for Content-Length and Cookie)
+    // Read headers (look for Content-Length)
     pos = 0;
     char headerLine[128];
     int hPos = 0;
@@ -166,7 +171,6 @@ void AppWebServer::_handleClient(WiFiClient& client) {
             if (hPos <= 1) break;  // blank line = end of headers
             if (strncmp(headerLine, "Content-Length:", 15) == 0)
                 contentLength = atoi(headerLine + 16);
-            // Accumulate for auth check
             if (pos + hPos < (int)sizeof(headers) - 1) {
                 strncpy(headers + pos, headerLine, sizeof(headers) - pos - 1);
                 pos += hPos;
@@ -188,8 +192,11 @@ void AppWebServer::_handleClient(WiFiClient& client) {
     }
 
     // Route
-    if (strstr(reqLine, "GET / ") || strstr(reqLine, "GET /\r")) {
-        _serveDashboard(client);
+    bool isDashboard = !isPost &&
+        (strstr(reqLine, "GET / ") || strstr(reqLine, "GET /\r") || strstr(reqLine, "GET /?"));
+    if (isDashboard) {
+        bool syncing = strstr(reqLine, "syncing=1") != nullptr;
+        _serveDashboard(client, syncing);
     } else if (strstr(reqLine, "GET /api/status")) {
         _serveStatus(client);
     } else if (isPost && strstr(reqLine, "POST /api/settings")) {
@@ -206,59 +213,118 @@ void AppWebServer::_handleClient(WiFiClient& client) {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
-void AppWebServer::_serveDashboard(WiFiClient& client) {
+void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
     _sendHeader(client, 200, "text/html");
     _sendProgmem(client, HTML_HEAD);
 
     bool noboOk = _nobo.isConnected();
 
-    // Header
-    client.print(F("<header><h1>NoboGoogleCal</h1><div class=\"badges\">"));
-    client.print(F("<span class=\"badge badge-ok\">WiFi ✓</span>"));
+    // 1. Offline banner — topmost, above header
+    if (!noboOk) {
+        client.print(F("<div class=\"nobo-warn\">"));
+        client.print(F("&#9888; Nob&oslash; hub not reachable &mdash; calendar events are fetched but heating is not being controlled"));
+        client.print(F("</div>"));
+    }
+
+    // 2. Sync-in-progress banner
+    if (syncing) {
+        client.print(F("<div class=\"syncing-banner\">&#10003; Sync in progress &mdash; calendar will update shortly</div>"));
+    }
+
+    // Current board time (local)
+    time_t now = time(nullptr);
+    struct tm nowUtc = *gmtime(&now);
+    int localOff = norwayOffsetSeconds(&nowUtc);
+    time_t localNow = now + (time_t)localOff;
+    struct tm lNow = *gmtime(&localNow);
+    char boardTimeBuf[28];
+    snprintf(boardTimeBuf, sizeof(boardTimeBuf), "%02d.%02d.%04d %02d:%02d UTC+%d",
+             lNow.tm_mday, lNow.tm_mon+1, lNow.tm_year+1900,
+             lNow.tm_hour, lNow.tm_min, localOff/3600);
+
+    // 3. Header
+    client.print(F("<header><h1>TMS Heating</h1><div class=\"badges\">"));
+    client.print(F("<span class=\"badge badge-ok\">WiFi &#10003;</span>"));
     client.print(noboOk
-        ? F("<span class=\"badge badge-ok\">Nobø: Online</span>")
-        : F("<span class=\"badge badge-err\">Nobø: Offline</span>"));
+        ? F("<span class=\"badge badge-ok\">Nob&oslash;: Online</span>")
+        : F("<span class=\"badge badge-err\">Nob&oslash;: Offline</span>"));
+    client.print(F("<span class=\"badge badge-info\">"));
+    client.print(boardTimeBuf);
+    client.print(F("</span>"));
     const char* lastSync = _cal.lastSyncTime();
     if (lastSync[0]) {
-        client.print(F("<span class=\"badge badge-info\">Sync: "));
+        client.print(F("<span class=\"badge badge-info\">Updated: "));
         client.print(lastSync);
         client.print(F("</span>"));
     }
     client.print(F("<button class=\"settings-btn\" onclick=\"openSettings()\">&#9881; Settings</button>"));
     client.print(F("</div></header>"));
 
-    // Hero summary
+    // 4. Hero — one row per zone + optional countdown badge
     client.print(F("<div class=\"hero\">"));
-    client.print(F("<span class=\"hero-status\">"));
-    client.print(_engine.statusString()[0] ? _engine.statusString() : "—");
-    client.print(F("</span><span class=\"hero-next\">"));
-    client.print(_engine.nextEventString());
-    client.print(F("</span></div>"));
 
-    // Manual sync form
+    // Find the soonest upcoming zone change within 30 minutes
+    time_t soonestChange = 0;
+    bool   soonestToComfort = false;
+    for (int i = 0; i < _engine.zoneCount(); i++) {
+        time_t changeAt; bool toComfort;
+        if (_engine.nextChangeForZone(i, 1800, changeAt, toComfort)) {
+            if (soonestChange == 0 || changeAt < soonestChange) {
+                soonestChange    = changeAt;
+                soonestToComfort = toComfort;
+            }
+        }
+    }
+
+    for (int i = 0; i < _engine.zoneCount(); i++) {
+        const char* statusStr = statusName(_engine.zoneStatus(i));
+        client.print(F("<div class=\"hero-row\">"));
+        client.print(F("<span class=\"hero-zone-name\">"));
+        client.print(_engine.zoneName(i));
+        client.print(F("</span><span class=\"status status-"));
+        client.print(statusStr);
+        client.print(F("\">"));
+        client.print(statusStr);
+        client.print(F("</span></div>"));
+    }
+
+    if (soonestChange > 0) {
+        int minsLeft = (int)((soonestChange - now) / 60);
+        if (minsLeft < 1) minsLeft = 1;
+        char countBuf[48];
+        snprintf(countBuf, sizeof(countBuf),
+                 soonestToComfort ? "&#9889; Heating starts in %d min" : "&#9889; Heating ends in %d min",
+                 minsLeft);
+        client.print(F("<div class=\"hero-countdown\">"));
+        client.print(countBuf);
+        client.print(F("</div>"));
+    }
+
+    client.print(F("</div>"));
+
+    // 5. Manual sync form
     client.print(F("<div class=\"sync-bar\"><form method=\"POST\" action=\"/sync\">"));
     client.print(F("<input type=\"password\" name=\"pw\" placeholder=\"Password\" class=\"sync-pw\">"));
     client.print(F("<button type=\"submit\" class=\"settings-btn\">&#x21bb; Sync now</button>"));
     client.print(F("</form></div>"));
 
-    // Nobø offline banner
-    if (!noboOk) {
-        client.print(F("<div class=\"nobo-warn\">"));
-        client.print(F("&#9888; Nobø hub not reachable &mdash; calendar events are fetched but heating is not being controlled"));
-        client.print(F("</div>"));
-    }
-
-    // Weather card
+    // 6. Weather card
     client.print(F("<div class=\"weather\">"));
-    char tempBuf[16];
-    dtostrf(_weather.currentTemp(), 4, 1, tempBuf);
-    client.print(F("<div class=\"temp\">"));
-    client.print(tempBuf);
-    client.print(F(" °C</div><div class=\"info\">"));
+    bool weatherOk = _weather.isAvailable();
+    if (weatherOk) {
+        char tempBuf[16];
+        dtostrf(_weather.currentTemp(), 4, 1, tempBuf);
+        client.print(F("<div class=\"temp\">"));
+        client.print(tempBuf);
+        client.print(F(" &deg;C</div>"));
+    } else {
+        client.print(F("<div class=\"temp-na\">-- &deg;C</div>"));
+    }
+    client.print(F("<div class=\"info\">"));
     client.print(_weather.city());
     client.print(F("<br>"));
-    if (!_weather.isAvailable()) {
-        client.print(F("Weather API unavailable &mdash; using seasonal fallback<br>"));
+    if (!weatherOk) {
+        client.print(F("Weather data unavailable &mdash; using seasonal fallback<br>"));
     }
     client.print(F("Comfort heating: "));
     client.print(_weather.comfortAllowed()
@@ -266,7 +332,7 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
                  : F("<span class=\"suppressed\">Suppressed (too warm)</span>"));
     client.print(F("</div></div>"));
 
-    // Zone cards
+    // 7. Zone cards
     client.print(F("<div class=\"zones\">"));
     for (int i = 0; i < _engine.zoneCount(); i++) {
         const char* statusStr = statusName(_engine.zoneStatus(i));
@@ -288,7 +354,7 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
     }
     client.print(F("</div>"));
 
-    // Activity log
+    // 8. Activity log
     client.print(F("<p class=\"section-title\">Activity log</p>"));
     client.print(F("<div class=\"logbox\">"));
     if (AppLog::count() == 0) {
@@ -305,7 +371,7 @@ void AppWebServer::_serveDashboard(WiFiClient& client) {
     }
     client.print(F("</div>"));
 
-    client.print(F("<footer>NoboGoogleCal &mdash; Arduino Uno R4 WiFi</footer>"));
+    client.print(F("<footer>TMS Heating &mdash; Arduino Uno R4 WiFi</footer>"));
     _sendProgmem(client, HTML_FOOT);
 }
 
@@ -348,12 +414,17 @@ void AppWebServer::_printZoneEvents(WiFiClient& client, int zoneIndex, bool pend
         char endBuf[6];
         snprintf(endBuf, sizeof(endBuf), "%02d:%02d", lEndTm.tm_hour, lEndTm.tm_min);
 
+        // Show the zone's configured label when Google returns "Busy"
+        const char* label = (strcmp(ev.summary, "Busy") == 0)
+                            ? _engine.zoneEventLabel(zoneIndex)
+                            : ev.summary;
+
         client.print(F("<div class=\"ev\"><span class=\"ev-t\">"));
         client.print(timeBuf);
         client.print(F("&ndash;"));
         client.print(endBuf);
         client.print(F("</span><span class=\"ev-s\">"));
-        client.print(ev.summary);
+        client.print(label);
         client.print(F("</span>"));
         if (pending) client.print(F("<span class=\"badge badge-pend\">Pending</span>"));
         client.print(F("</div>"));
@@ -373,7 +444,6 @@ void AppWebServer::_printZoneEvents(WiFiClient& client, int zoneIndex, bool pend
 void AppWebServer::_printZoneTimeline(WiFiClient& client, int zoneIndex) {
     static const char* dn[7] = {"Su","Mo","Tu","We","Th","Fr","Sa"};
     time_t now = time(nullptr);
-    // Compute midnight in Norwegian local time so column 0 is always "today" locally
     struct tm nowUtcTm = *gmtime(&now);
     int localOff = norwayOffsetSeconds(&nowUtcTm);
     time_t localNow = now + (time_t)localOff;
@@ -386,8 +456,8 @@ void AppWebServer::_printZoneTimeline(WiFiClient& client, int zoneIndex) {
         time_t localDayStart = dayStart + (time_t)localOff;
         struct tm dTm = *gmtime(&localDayStart);
 
-        bool hasEvent   = false;
-        bool activeNow  = false;
+        bool hasEvent  = false;
+        bool activeNow = false;
         for (int e = 0; e < MAX_EVENTS_PER_ZONE * MAX_ZONES; e++) {
             const CalEvent& ev = _cal.events()[e];
             if (!ev.valid || ev.zoneIndex != (uint8_t)zoneIndex) continue;
@@ -397,8 +467,12 @@ void AppWebServer::_printZoneTimeline(WiFiClient& client, int zoneIndex) {
             }
         }
 
+        char dateBuf[6];
+        snprintf(dateBuf, sizeof(dateBuf), "%02d.%02d", dTm.tm_mday, dTm.tm_mon + 1);
         client.print(F("<div class=\"day-col\"><div class=\"day-label\">"));
         client.print(dn[dTm.tm_wday]);
+        client.print(F("<br>"));
+        client.print(dateBuf);
         client.print(F("</div><div class=\"day-block"));
         if (activeNow)     client.print(F(" comfort active"));
         else if (hasEvent) client.print(F(" comfort"));
@@ -460,7 +534,6 @@ void AppWebServer::_serveSettings(WiFiClient& client, const char* body, int len)
         Serial.println(newCity);
     }
 
-    // Redirect back to dashboard
     client.print(F("HTTP/1.1 303 See Other\r\nLocation: /\r\nContent-Length: 0\r\n\r\n"));
 }
 
@@ -486,7 +559,6 @@ void AppWebServer::_sendProgmem(WiFiClient& client, const char* pgm) {
     }
 }
 
-// URL-decode a form field value (handles %XX and + = space)
 static void urlDecode(char* out, int outLen, const char* in) {
     int o = 0;
     for (int i = 0; in[i] && o < outLen - 1; i++) {
@@ -509,7 +581,6 @@ void AppWebServer::_parseBody(const char* body, int /*len*/, const char* key, ch
     const char* p = strstr(body, search);
     if (!p) { out[0] = '\0'; return; }
     p += strlen(search);
-    // value ends at & or end of string
     char raw[128] = {};
     int i = 0;
     while (*p && *p != '&' && i < (int)sizeof(raw) - 1) raw[i++] = *p++;
@@ -530,8 +601,10 @@ void AppWebServer::_serveSync(WiFiClient& client, const char* body, int len) {
         return;
     }
 
+    // Redirect first — browser navigates while sync runs in background
+    client.print(F("HTTP/1.1 303 See Other\r\nLocation: /?syncing=1\r\nContent-Length: 0\r\n\r\n"));
+    client.flush();
     _cal.forceSyncAll();
-    client.print(F("HTTP/1.1 303 See Other\r\nLocation: /\r\nContent-Length: 0\r\n\r\n"));
 }
 
 bool AppWebServer::_checkAuth(const char* /*headers*/) { return false; }
