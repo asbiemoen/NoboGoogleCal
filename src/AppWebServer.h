@@ -1,6 +1,7 @@
 #pragma once
 #include <WiFiS3.h>
 #include "Types.h"
+#include "NVMConfig.h"
 #include "ScheduleEngine.h"
 #include "WeatherService.h"
 #include "NoboController.h"
@@ -11,8 +12,9 @@ public:
     AppWebServer(ScheduleEngine& engine, WeatherService& weather,
                  NoboController& nobo, CalendarManager& cal);
 
-    void begin(const char* password);
+    void begin(const char* password, NVMConfig& nvm);
     void tick();
+    bool rebootPending() const { return _rebootPending; }
 
 private:
     WiFiServer       _server;
@@ -20,8 +22,10 @@ private:
     WeatherService&  _weather;
     NoboController&  _nobo;
     CalendarManager& _cal;
+    NVMConfig*       _nvm;
     char             _password[32];
     bool             _started;
+    bool             _rebootPending;
 
     void _handleClient(WiFiClient& client);
     void _serveDashboard(WiFiClient& client, bool syncing);
@@ -34,6 +38,7 @@ private:
     void _sendHeader(WiFiClient& client, int code, const char* contentType);
     void _sendProgmem(WiFiClient& client, const char* pgm);
 
+    void _serveSettingsModal(WiFiClient& client);
     void _printZoneEvents(WiFiClient& client, int zoneIndex, bool pending);
     void _printZoneTimeline(WiFiClient& client, int zoneIndex);
 };
