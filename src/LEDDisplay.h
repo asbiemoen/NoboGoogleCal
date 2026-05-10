@@ -3,7 +3,7 @@
 #include <WiFiS3.h>
 
 #define LED_SCROLL_STEP_MS   60UL
-#define LED_SCROLL_MAX_COLS  120
+#define LED_SCROLL_MAX_COLS  200
 
 class LEDDisplay {
 public:
