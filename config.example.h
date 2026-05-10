@@ -9,6 +9,7 @@
 
 // ─── Web interface ────────────────────────────────────────────────────────────
 #define WEB_PASSWORD  "password"       // Password for the settings page
+#define SITE_TITLE    "Heating Controller"  // Displayed in browser tab and page header
 
 // ─── Weather (OpenWeatherMap) ─────────────────────────────────────────────────
 #define WEATHER_CITY    "Oslo"         // Nearest city for weather lookup

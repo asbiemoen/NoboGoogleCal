@@ -14,7 +14,7 @@ static const char HTML_HEAD[] PROGMEM = R"html(<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="60">
 <meta name="theme-color" content="#0f1117">
-<title>TMS Heating</title>
+<title>Heating Controller</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}
@@ -253,7 +253,7 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
              lNow.tm_hour, lNow.tm_min, lNow.tm_sec, localOff/3600);
 
     // 3. Header
-    client.print(F("<header><h1>TMS Heating</h1><div class=\"badges\">"));
+    client.print(F("<header><h1>Heating Controller</h1><div class=\"badges\">"));
     client.print(F("<span class=\"badge badge-ok\">WiFi &#10003;</span>"));
     client.print(noboOk
         ? F("<span class=\"badge badge-ok\">Nob&oslash;: Online</span>")
@@ -375,7 +375,7 @@ void AppWebServer::_serveDashboard(WiFiClient& client, bool syncing) {
     }
     client.print(F("</div>"));
 
-    client.print(F("<footer>TMS Heating &mdash; Arduino Uno R4 WiFi</footer>"));
+    client.print(F("<footer>Heating Controller &mdash; Arduino Uno R4 WiFi</footer>"));
     _sendProgmem(client, HTML_FOOT);
 }
 
